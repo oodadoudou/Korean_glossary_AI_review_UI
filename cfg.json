@@ -1,0 +1,8 @@
+{
+  "api_key": "YOUR_API_KEY",
+  "base_url": "https://api.deepseek.com/v1",
+  "model": "deepseek-reasoner",
+  "MAX_WORKERS":10,
+  "BATCH_SIZE": 10,
+  "default_directory": "YOUR_DEFAULT_DIRECTORY_PATH"
+}
