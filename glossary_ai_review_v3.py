@@ -12,9 +12,7 @@ import importlib.util
 import threading
 import random
 
-# --- 依赖库检查 (Dependency Check) ---
 def check_dependencies():
-    """检查所有必需的库是否已安装。"""
     required_dependencies = {
         'pandas': 'pandas',
         'openai': 'openai',
