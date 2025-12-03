@@ -1,0 +1,8 @@
+flask
+pywebview
+pandas
+openpyxl
+xlsxwriter
+openai
+tqdm
+requests

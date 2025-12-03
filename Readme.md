@@ -1,118 +1,160 @@
-# AI 术语表复审脚本
+# Korean Glossary AI Review Tool / 韩中术语 AI 审查工具
 
-这是一个用于韩中小说翻译的 **AI 术语表复审脚本**。
-
----
-
-## 🚀 核心功能
-
-### 两阶段智能审查
-1. **阶段一 (批量清理):**
-   - AI 并行审查所有术语，判断是否应删除 (如通用词 `침대 시트` -> `床单`)，或译文是否需要修正。
-2. **阶段二 (一致性仲裁):**
-   - 脚本自动找出所有翻译冲突，让 AI 进行裁决，确保术语统一。
-
-### 角色名关联检查
-- 脚本能找出像 `현재웅` (全名) 和 `재웅` (简称) 这样的关联词。
-- 它会请求 AI 检查它们的译法是否在逻辑上保持一致 (例如 `玄在雄` 和 `在雄`)，并自动修正。
-
-### 高速并行处理
-- 你可以在 `cfg.json` 中设置 `MAX_WORKERS` (线程数) 和 `BATCH_SIZE` (每批大小)。
-- 脚本会使用多线程高速调用 API，快速完成审查。
-
-### 断点续传
-- 脚本会自动保存进度到 `modified.xlsx`。
-- 如果中途停止 (例如按 Ctrl+C)，下次运行时它会自动跳过已处理的条目，从中断的地方继续。
-
-### 智能速率控制
-- 当 API 调用过于频繁 (Rate Limit) 时，脚本会自动暂停并重试，不会导致程序崩溃。
+[English](#english) | [中文](#chinese)
 
 ---
 
-## 🔧 如何使用
+<a name="chinese"></a>
+## 🇨🇳 中文说明
 
-### 1. 准备环境
+**韩中术语 AI 审查工具** 是一款专为小说翻译设计的桌面应用程序。它利用先进的 AI 模型（如 Deepseek）来批量审查韩中术语表，自动识别并标记通用词、多义词或翻译错误的术语，帮助译者和编辑快速清洗和优化术语库。
 
-你首先需要安装脚本运行所需的 Python 库。
+### ✨ 主要功能
 
+*   **AI 智能审查**: 自动分析术语的准确性、一致性和必要性。
+*   **批量处理**: 支持并行处理大量术语，高效快速。
+*   **可视化看板**: 实时监控审查进度和 AI 执行日志。
+*   **Excel 自动过滤**: 生成的最终术语表自带筛选功能，方便后续整理。
+*   **修改日志**: 详细记录 AI 的每一次修改和删除操作及其理由。
+*   **跨平台支持**: 提供 Windows 可执行文件，同时也支持通过源码在 Mac/Linux 上运行。
+
+### 📸 界面预览
+
+#### 1. 运行看板 (Dashboard)
+实时查看任务进度和后台日志。
+![Dashboard](public/dashboard.png)
+
+#### 2. 任务设置 (Task Setup)
+配置待审查的文件夹和小说背景信息。
+![Task Setup](public/%E4%BB%BB%E5%8A%A1.png)
+
+#### 3. 审查结果 (Results)
+查看 AI 的修改建议和详细理由。
+![Results](public/result.png)
+
+#### 4. 系统设置 (Settings)
+配置 API Key、模型参数和并发数。
+![Settings](public/settings.png)
+
+---
+
+### 🚀 使用指南 (Windows 用户)
+
+如果您使用的是 Windows 系统，可以直接运行打包好的程序，无需安装 Python 环境。
+
+1.  **下载**: 获取最新版本的 `KoreanGlossaryReview.exe` (位于 `dist/` 目录下)。
+2.  **运行**: 双击 `KoreanGlossaryReview.exe` 启动程序。
+3.  **配置 API**:
+    *   首次运行时，进入 **设置 (Settings)** 页面。
+    *   输入您的 Deepseek API Key (或其他兼容 OpenAI 格式的 API Key)。
+    *   点击保存。
+4.  **开始任务**:
+    *   进入 **任务 (Task)** 页面。
+    *   选择包含 `.xlsx` 术语表和 `.txt` 参考文本的文件夹。
+    *   输入小说背景设定（有助于 AI 更准确地判断）。
+    *   点击 **开始审查**。
+5.  **查看结果**:
+    *   审查完成后，结果文件 `glossary_output.xlsx` (最终术语表) 和 `modified.xlsx` (修改日志) 会生成在您选择的文件夹中。
+    *   您也可以在 **结果 (Results)** 页面直接查看修改详情。
+
+---
+
+### 💻 开发者指南 / 源码运行 (Mac/Linux/Windows)
+
+如果您是开发者，或者需要在非 Windows 平台上运行，可以通过源码启动。
+
+#### 环境要求
+*   Python 3.8+
+*   Node.js (仅用于前端开发，运行只需 Python)
+
+#### 安装步骤
+
+1.  **克隆项目**:
+    ```bash
+    git clone https://github.com/your-repo/korean-glossary-review.git
+    cd korean-glossary-review
+    ```
+
+2.  **安装 Python 依赖**:
+    ```bash
+    pip install -r requirements.txt
+    ```
+    *注意: 如果 `requirements.txt` 不存在，请手动安装以下核心库:*
+    ```bash
+    pip install flask pandas openai pywebview xlsxwriter openpyxl
+    ```
+
+3.  **运行程序**:
+    ```bash
+    python run.py
+    ```
+    或者
+    ```bash
+    python backend/app.py
+    ```
+
+#### 前端开发 (可选)
+前端代码位于 `frontend/` 目录，基于 React + Vite。
 ```bash
-pip install pandas openai openpyxl tqdm xlsxwriter
+cd frontend
+npm install
+npm run dev
 ```
-
-### 2. 配置文件 (cfg.json)
-
-在脚本 (`.py`) 旁边创建一个 `cfg.json` 文件。脚本启动时会自动读取它。
-
-**`cfg.json` 文件内容:**
-
-```json
-{
-  "api_key": "填入你的API密钥",
-  "base_url": "https://api.deepseek.com/v1",
-  "model": "deepseek-reasoner",
-  "MAX_WORKERS": 10,
-  "BATCH_SIZE": 10,
-  "default_directory": "填入你存放术语表的默认文件夹路径"
-}
-```
-
-- `api_key`: 你的 API 密钥 (例如 DeepSeek 或 OpenAI)。
-- `base_url`: API 的接入点。
-- `MAX_WORKERS`: 并行线程数 (推荐 5-10)。
-- `BATCH_SIZE`: 每个 API 请求包含多少个术语 (推荐 5-15)。
-- `default_directory`: 你的工作目录，方便你回车确认。
-
-### 3. 准备源文件
-
-你需要在一个文件夹中准备 **2 个**文件：
-
-1. **术语表 (Excel):** 1 个 `.xlsx` 文件。脚本会自动查找它。
-2. **参考文件 (TXT):** 1 个 `.txt` 文件。这是 AI 判断上下文的来源。
-
-**📁 文件结构示例:**
-
-```
-/你的小说文件夹/
-  ├── glossary_ai_review_v3.py     (脚本)
-  ├── cfg.json                     (你的配置)
-  ├── 我的术语表.xlsx                (你的源文件)
-  ├── 我的参考文件.txt               (你的源文件)
-```
-
-### 4. 运行脚本
-
-1. 打开终端 (Terminal) 或命令提示符 (CMD)。
-2. 运行脚本：
-
-```bash
-python glossary_ai_review_v3.py
-```
-
-3. 脚本会要求你输入 **文件所在目录** (如果你配置了 `default_directory`，直接按回车即可)。
-4. 然后，你需要输入 **小说背景设定** (例如主要角色、世界观等)。这对 AI 的判断很重要。
-5. 输入背景设定后，按**空行**并**回车**，脚本将开始自动处理。
 
 ---
 
-## 📈 输出文件
+<a name="english"></a>
+## 🇺🇸 English Description
 
-处理完成后，你会在同一目录中得到 3 个文件：
+**Korean Glossary AI Review Tool** is a desktop application designed for novel translation. It leverages advanced AI models (like Deepseek) to batch review Korean-Chinese glossaries, automatically identifying and flagging generic terms, polysemes, or translation errors, helping translators and editors quickly clean and optimize their term bases.
 
-- **`glossary_output.xlsx` (最终术语表)**
-  - 这是 AI 清理和统一后的最终版本。
-  - 已删除的词条会从这个文件中移除。
-- **`modified.xlsx` (修改日志)**
-  - 这是最重要的日志文件。
-  - 它记录了 AI 对**每一条**术语的操作 (保留、修改、删除) 和判断依据 (emoji 和理由)。
-- **`error_log.txt` (错误日志)**
-  - 记录 API 请求失败或 JSON 解析失败等技术错误。
+### ✨ Key Features
+
+*   **AI-Powered Review**: Automatically analyzes term accuracy, consistency, and necessity.
+*   **Batch Processing**: Supports parallel processing for high efficiency.
+*   **Visual Dashboard**: Real-time monitoring of review progress and execution logs.
+*   **Excel AutoFilter**: Generated glossaries come with auto-filters for easy sorting.
+*   **Modification Log**: Detailed records of every AI modification/deletion with justifications.
+*   **Cross-Platform**: Available as a Windows executable, and runs from source on Mac/Linux.
+
+### 🚀 Usage Guide (Windows)
+
+1.  **Download**: Get the `KoreanGlossaryReview.exe` from the `dist/` folder.
+2.  **Run**: Double-click to start.
+3.  **Configure**: Go to **Settings**, enter your API Key, and save.
+4.  **Start**: Go to **Task**, select your working directory (containing `.xlsx` glossary and `.txt` reference), input the novel background, and click **Start**.
+5.  **Result**: Check `glossary_output.xlsx` in your folder or view details in the **Results** tab.
+
+### 💻 Run from Source (Mac/Linux)
+
+1.  **Install Python 3.8+**.
+2.  **Install Dependencies**:
+    ```bash
+    pip install flask pandas openai pywebview xlsxwriter openpyxl
+    ```
+3.  **Run**:
+    ```bash
+    python run.py
+    ```
 
 ---
 
-## 💡 关于 AI 提示词 (Prompts)
+### 🔒 Security Note / 安全提示
 
-脚本内置了 3 个 V3 提示词模板，用于执行不同任务：
+*   **API Key**: Your API Key is stored locally in `cfg.json`. This file is **gitignored** and will not be uploaded to version control.
+*   **Privacy**: The application only sends glossary terms to the AI provider (e.g., Deepseek) for processing. No other data is collected.
+*   **API Key**: 您的 API Key 存储在本地的 `cfg.json` 文件中。该文件已被加入 `.gitignore`，不会被上传到版本控制系统。
 
-1. **批量审查 (BATCH_REVIEW):** (阶段一) 用于清理、删除和初步修正。
-2. **一致性仲裁 (CONSISTENCY_CHECK):** (阶段 2a) 用于解决完全相同的原文有不同译法的问题。
-3. **实体关联仲裁 (FUZZY_CONSISTENCY):** (阶段 2b) 用于解决角色全名和简称的译法一致性问题。
+---
+
+### 📁 Project Structure / 项目结构
+
+*   `backend/`: Flask server and core logic (AI service, engine).
+*   `frontend/`: React + Vite UI source code.
+*   `dist/`: Compiled frontend assets and Windows executable.
+*   `run.py`: Application entry point.
+*   `build_exe.py`: PyInstaller build script.
+
+---
+
+**License**: MIT
