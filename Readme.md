@@ -42,7 +42,7 @@
 
 如果您使用的是 Windows 系统，可以直接运行打包好的程序，无需安装 Python 环境。
 
-1.  **下载**: [点击这里下载最新版本 (v1.00)](https://github.com/oodadoudou/Korean_glossary_AI_review_UI/releases/tag/1.0.0)。
+1.  **下载**: 前往 [Release 页面](https://github.com/oodadoudou/Korean_glossary_AI_review_UI/releases) 下载最新的安装包 (zip文件)。
 2.  **运行**: 双击 `KoreanGlossaryReview.exe` 启动程序。
 3.  **配置 API**:
     *   首次运行时，进入 **设置 (Settings)** 页面。
@@ -119,7 +119,7 @@ npm run dev
 
 ### 🚀 Usage Guide (Windows)
 
-1.  **Download**: [Click here to download the latest release (v1.00)](https://github.com/oodadoudou/Korean_glossary_AI_review_UI/releases/tag/1.0.0).
+1.  **Download**: Go to the [Release Page](https://github.com/oodadoudou/Korean_glossary_AI_review_UI/releases) and download the latest package (zip file).
 2.  **Run**: Double-click to start.
 3.  **Configure**: Go to **Settings**, enter your API Key, and save.
 4.  **Start**: Go to **Task**, select your working directory (containing `.xlsx` glossary and `.txt` reference), input the novel background, and click **Start**.
