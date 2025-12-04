@@ -28,6 +28,10 @@ PyInstaller.__main__.run([
     '--hidden-import=webview',
     '--hidden-import=webview.platforms.winforms',
     '--hidden-import=clr', # For pythonnet if used by pywebview on windows
+    '--hidden-import=pythonnet',
+    '--hidden-import=clr_loader',
+    '--hidden-import=System',
+    '--hidden-import=System.Windows.Forms',
 ])
 
 print("Build complete. Executable is in dist/KoreanGlossaryReview/KoreanGlossaryReview.exe")
