@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from werkzeug.utils import secure_filename
 from backend.core.engine import ReviewEngine
 from backend.config_manager import load_config, save_config
 import os
@@ -104,6 +105,32 @@ def list_results():
     except Exception as e:
         print(f"Error listing results: {e}")
         return jsonify([])
+
+@api_blueprint.route('/results/upload', methods=['POST'])
+def upload_result():
+    if 'file' not in request.files:
+        return jsonify({"status": "error", "message": "No file part"}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"status": "error", "message": "No selected file"}), 400
+        
+    if file and file.filename.endswith('.json'):
+        filename = secure_filename(file.filename)
+        config = load_config()
+        directory = config.get("last_task_directory") or config.get("default_directory", "")
+        
+        if not directory or not os.path.exists(directory):
+            # Fallback to default directory if last_task_directory is invalid
+            directory = config.get("default_directory", ".")
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+                
+        filepath = os.path.join(directory, filename)
+        file.save(filepath)
+        return jsonify({"status": "success", "filename": filename})
+    else:
+        return jsonify({"status": "error", "message": "Invalid file type. Only JSON allowed."}), 400
 
 @api_blueprint.route('/results/content', methods=['GET'])
 def get_result_content():

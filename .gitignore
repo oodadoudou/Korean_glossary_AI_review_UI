@@ -38,3 +38,4 @@ Thumbs.db
 build/
 dist/
 *.spec
+public/

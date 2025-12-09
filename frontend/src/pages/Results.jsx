@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FileSpreadsheet, RefreshCw, AlertCircle, Search } from 'lucide-react';
+import { FileSpreadsheet, RefreshCw, AlertCircle, Search, Copy, Check, Upload } from 'lucide-react';
 import api from '../api/client';
 
 export default function Results() {
@@ -64,6 +64,28 @@ export default function Results() {
         );
     });
 
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            await api.post('/results/upload', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+            });
+            fetchFiles(); // Refresh list to show new file
+        } catch (err) {
+            console.error("Failed to upload file", err);
+            setError("文件导入失败");
+        } finally {
+            e.target.value = ''; // Reset input
+        }
+    };
+
     return (
         <div className="p-8 max-w-7xl mx-auto h-full flex flex-col">
             <div className="flex justify-between items-center mb-6">
@@ -71,13 +93,24 @@ export default function Results() {
                     <FileSpreadsheet className="text-indigo-600" />
                     审查结果 (Results)
                 </h2>
-                <button
-                    onClick={fetchFiles}
-                    className="p-2 text-gray-500 hover:text-indigo-600 transition-colors"
-                    title="刷新列表"
-                >
-                    <RefreshCw size={20} />
-                </button>
+                <div className="flex gap-2">
+                    <label className="cursor-pointer p-2 text-gray-500 hover:text-indigo-600 transition-colors" title="导入结果 (JSON)">
+                        <input
+                            type="file"
+                            accept=".json"
+                            className="hidden"
+                            onChange={handleImport}
+                        />
+                        <Upload size={20} />
+                    </label>
+                    <button
+                        onClick={fetchFiles}
+                        className="p-2 text-gray-500 hover:text-indigo-600 transition-colors"
+                        title="刷新列表"
+                    >
+                        <RefreshCw size={20} />
+                    </button>
+                </div>
             </div>
 
             {/* Controls */}
@@ -158,10 +191,23 @@ export default function Results() {
                                     return (
                                         <tr key={i} className={rowClass}>
                                             <td className="px-4 py-3 text-lg">{emoji}</td>
-                                            <td className="px-4 py-3 font-medium">{term}</td>
-                                            <td className="px-4 py-3">{original}</td>
+                                            <td className="px-4 py-3 font-medium">
+                                                <div className="flex items-center gap-2 group">
+                                                    <span>{term}</span>
+                                                    <CopyButton text={term} />
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center gap-2 group">
+                                                    <span>{original}</span>
+                                                    <CopyButton text={original} />
+                                                </div>
+                                            </td>
                                             <td className="px-4 py-3 font-bold text-indigo-700">
-                                                {isDeleted ? <span className="line-through opacity-50">{recommended || original}</span> : recommended}
+                                                <div className="flex items-center gap-2 group">
+                                                    {isDeleted ? <span className="line-through opacity-50">{recommended || original}</span> : <span>{recommended}</span>}
+                                                    <CopyButton text={recommended || (isDeleted ? original : '')} />
+                                                </div>
                                             </td>
                                             <td className="px-4 py-3 text-xs text-gray-600 max-w-xs truncate" title={justification}>
                                                 {reason ? <span className="font-bold mr-1">[{reason}]</span> : null}
@@ -180,5 +226,27 @@ export default function Results() {
                 </div>
             </div>
         </div>
+    );
+}
+
+function CopyButton({ text }) {
+    const [copied, setCopied] = useState(false);
+
+    if (!text) return null;
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <button
+            onClick={handleCopy}
+            className={`opacity-0 group-hover:opacity-100 transition-all p-1 rounded ${copied ? 'text-green-600 bg-green-50' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+            title="复制"
+        >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+        </button>
     );
 }
