@@ -1,6 +1,7 @@
 import PyInstaller.__main__
 import os
 import shutil
+from PyInstaller.utils.hooks import collect_all
 
 # Define paths
 BASE_DIR = os.getcwd()
@@ -14,7 +15,39 @@ if not os.path.exists(FRONTEND_DIST):
 
 print("Starting build process...")
 
-PyInstaller.__main__.run([
+# Collect dependencies for pythonnet and webview
+# These packages often have hidden imports and binaries that standard PyInstaller analysis misses
+packages_to_collect = ['pythonnet', 'clr_loader', 'webview']
+collected_datas = []
+collected_binaries = []
+collected_hidden_imports = []
+
+print("Collecting runtime data and binaries for: " + ", ".join(packages_to_collect))
+for package in packages_to_collect:
+    try:
+        datas, binaries, hiddenimports = collect_all(package)
+        collected_datas.extend(datas)
+        collected_binaries.extend(binaries)
+        collected_hidden_imports.extend(hiddenimports)
+    except Exception as e:
+        print(f"Warning: Failed to collect data for {package}: {e}")
+
+# Format for PyInstaller
+# --add-data "src;dest" (Windows)
+add_data_args = [f'--add-data={src};{dest}' for src, dest in collected_datas]
+add_binary_args = [f'--add-binary={src};{dest}' for src, dest in collected_binaries]
+hidden_import_args = [f'--hidden-import={h}' for h in collected_hidden_imports]
+
+# Manual hidden imports (explicitly safe to add)
+manual_hidden_imports = [
+    'engineio.async_drivers.threading',
+    'System',
+    'System.Windows.Forms',
+]
+hidden_import_args.extend([f'--hidden-import={h}' for h in manual_hidden_imports])
+
+# Construct arguments
+args = [
     ENTRY_POINT,                            # Entry point
     '--name=KoreanGlossaryReview',          # Name of the exe
     '--onedir',                             # One directory bundle
@@ -23,15 +56,15 @@ PyInstaller.__main__.run([
     f'--add-data={FRONTEND_DIST};frontend/dist', # Include frontend assets
     '--clean',                              # Clean cache
     '--noconfirm',                          # Overwrite output directory
-    # Hidden imports that might be missed
-    '--hidden-import=engineio.async_drivers.threading',
-    '--hidden-import=webview',
-    '--hidden-import=webview.platforms.winforms',
-    '--hidden-import=clr', # For pythonnet if used by pywebview on windows
-    '--hidden-import=pythonnet',
-    '--hidden-import=clr_loader',
-    '--hidden-import=System',
-    '--hidden-import=System.Windows.Forms',
-])
+]
 
-print("Build complete. Executable is in dist/KoreanGlossaryReview/KoreanGlossaryReview.exe")
+# Add collected arguments
+args.extend(add_data_args)
+args.extend(add_binary_args)
+args.extend(hidden_import_args)
+
+print(f"Running PyInstaller with {len(args)} arguments...")
+
+PyInstaller.__main__.run(args)
+
+print("\nBuild complete. Executable is in dist/KoreanGlossaryReview/KoreanGlossaryReview.exe")
