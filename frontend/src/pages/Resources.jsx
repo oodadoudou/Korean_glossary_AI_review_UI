@@ -19,8 +19,8 @@ export default function Resources() {
         },
         {
             title: "汉化 Prompt 共享文档",
-            description: "金山文档在线协作，查看和分享最新的汉化提示词最佳实践。",
-            url: "https://www.kdocs.cn/l/cneDKChuM1Ac",
+            description: "notion文档在线协作，查看和分享最新的汉化提示词最佳实践。",
+            url: "https://nebula-truffle-0d4.notion.site/prompt-2db8b4c62abd8003b195c6758b8a5ac4",
             icon: <BookOpen className="w-8 h-8 text-amber-600" />,
             color: "bg-amber-50"
         },

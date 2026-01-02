@@ -1,7 +1,15 @@
 import json
 import os
 
-CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'cfg.json')
+import sys
+
+# Determine config path based on whether we are frozen (packaged) or not
+if getattr(sys, 'frozen', False):
+    # In a frozen app, the config should be next to the executable
+    CONFIG_PATH = os.path.join(os.path.dirname(sys.executable), 'cfg.json')
+else:
+    # In dev, it's relative to this file
+    CONFIG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'cfg.json')
 
 DEFAULT_CONFIG = {
     "api_key": "YOUR-API-KEY",

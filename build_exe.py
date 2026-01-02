@@ -68,3 +68,17 @@ print(f"Running PyInstaller with {len(args)} arguments...")
 PyInstaller.__main__.run(args)
 
 print("\nBuild complete. Executable is in dist/KoreanGlossaryReview/KoreanGlossaryReview.exe")
+
+# Copy default config if it doesn't exist in dist
+dist_dir = os.path.join(BASE_DIR, 'dist', 'KoreanGlossaryReview')
+config_src = os.path.join(BASE_DIR, 'cfg.json.example')
+config_dst = os.path.join(dist_dir, 'cfg.json')
+
+if os.path.exists(config_src):
+    try:
+        shutil.copy(config_src, config_dst)
+        print(f"Copied default config to {config_dst}")
+    except Exception as e:
+        print(f"Warning: Failed to copy config: {e}")
+else:
+    print("Warning: cfg.json.example not found, skipping config copy.")
