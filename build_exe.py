@@ -38,6 +38,19 @@ add_data_args = [f'--add-data={src};{dest}' for src, dest in collected_datas]
 add_binary_args = [f'--add-binary={src};{dest}' for src, dest in collected_binaries]
 hidden_import_args = [f'--hidden-import={h}' for h in collected_hidden_imports]
 
+# Explicitly find and add Python.Runtime.dll
+import pythonnet
+pythonnet_dir = os.path.dirname(pythonnet.__file__)
+runtime_dll_path = os.path.join(pythonnet_dir, 'runtime', 'Python.Runtime.dll')
+
+if os.path.exists(runtime_dll_path):
+    print(f"Explicitly adding Python.Runtime.dll from: {runtime_dll_path}")
+    # Add to both root and pythonnet folder to be safe
+    add_binary_args.append(f'--add-binary={runtime_dll_path};.')
+    add_binary_args.append(f'--add-binary={runtime_dll_path};pythonnet/runtime')
+else:
+    print(f"Warning: Python.Runtime.dll not found at expected path: {runtime_dll_path}")
+
 # Manual hidden imports (explicitly safe to add)
 manual_hidden_imports = [
     'engineio.async_drivers.threading',
