@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Pause, Terminal, CheckCircle2, Play } from 'lucide-react';
+import { Pause, Terminal, CheckCircle2, Play, HelpCircle } from 'lucide-react';
 import api from '../api/client';
 
 export default function Dashboard() {
@@ -8,6 +8,7 @@ export default function Dashboard() {
     const logsEndRef = useRef(null);
     const logsContainerRef = useRef(null);
     const [autoScroll, setAutoScroll] = useState(true);
+    const [rounds, setRounds] = useState(1);
 
     useEffect(() => {
         const interval = setInterval(fetchStatus, 1000);
@@ -49,7 +50,7 @@ export default function Dashboard() {
 
     const handleStart = async () => {
         try {
-            const res = await api.post('/control/start', {});
+            const res = await api.post('/control/start', { rounds });
             if (res.data.status !== 'success') {
                 alert(res.data.message || "启动失败，请先在任务设置中保存配置");
             }
@@ -70,7 +71,26 @@ export default function Dashboard() {
                     <h2 className="text-2xl font-bold text-gray-900">运行看板 (Dashboard)</h2>
                     <p className="text-gray-500">{progress.message}</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center">
+                    {!running && (
+                        <div className="flex items-center gap-2 mr-4 bg-white p-1.5 rounded-lg border border-gray-200 shadow-sm">
+                            <label className="text-sm font-medium text-gray-700 ml-2">审查轮次:</label>
+                            <input
+                                type="number"
+                                min="1"
+                                max="10"
+                                value={rounds}
+                                onChange={(e) => setRounds(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
+                                className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-center"
+                            />
+                            <div className="group relative">
+                                <HelpCircle size={16} className="text-gray-400 cursor-help" />
+                                <div className="absolute top-full right-0 mt-2 w-64 p-2 bg-gray-800 text-xs text-white rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-50 pointer-events-none">
+                                    多轮审查可提高质量，但过多轮次（&gt;3）可能导致过度修正。建议 1-3 轮。最大 10 轮。
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {running ? (
                         <button onClick={handleStop} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 font-medium flex items-center gap-2">
                             <Pause size={18} /> 暂停 / 停止

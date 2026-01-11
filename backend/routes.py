@@ -168,10 +168,12 @@ def start_task():
     directory = data.get('directory') or config.get('last_task_directory')
     context = data.get('context') or config.get('last_task_context', '')
     
+    rounds = data.get('rounds', 1) # Default to 1 round
+    
     if not directory:
         return jsonify({"status": "error", "message": "No directory specified and no saved task config found."})
         
-    success, msg = engine.start_task(directory, context)
+    success, msg = engine.start_task(directory, context, rounds)
     return jsonify({"status": "success" if success else "error", "message": msg})
 
 @api_blueprint.route('/control/stop', methods=['POST'])

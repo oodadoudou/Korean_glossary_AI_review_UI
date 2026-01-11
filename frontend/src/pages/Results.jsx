@@ -162,6 +162,7 @@ export default function Results() {
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-50 text-gray-700 font-medium sticky top-0 z-10">
                                 <tr>
+                                    <th className="px-4 py-3 border-b text-center w-16">轮次</th>
                                     <th className="px-4 py-3 border-b">状态</th>
                                     <th className="px-4 py-3 border-b">原文 (Korean)</th>
                                     <th className="px-4 py-3 border-b">原译 (Original)</th>
@@ -180,6 +181,7 @@ export default function Results() {
                                     const justification = row.justification;
                                     const emoji = row.emoji || row.judgment_emoji;
                                     const action = row.action; // 'Delete', 'Modify', 'Keep'
+                                    const round = row.round || 1; // Default to 1 if missing
 
                                     const isDeleted = action === 'Delete' || row.should_delete || emoji === '🗑️';
                                     const isWarning = emoji === '⚠️';
@@ -190,6 +192,7 @@ export default function Results() {
 
                                     return (
                                         <tr key={i} className={rowClass}>
+                                            <td className="px-4 py-3 text-center text-gray-500 font-mono text-xs">{round}</td>
                                             <td className="px-4 py-3 text-lg">{emoji}</td>
                                             <td className="px-4 py-3 font-medium">
                                                 <div className="flex items-center gap-2 group">

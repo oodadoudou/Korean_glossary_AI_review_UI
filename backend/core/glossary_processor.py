@@ -24,14 +24,44 @@ class GlossaryProcessor:
         with open(reference_path, 'r', encoding='utf-8') as f:
             content = f.read().replace('\r\n', '\n').replace('\r', '\n')
         
-        blocks = content.split('原文：')[1:]
         reference_dict = {}
-        for block in blocks:
-            match = re.search(r'^(?P<korean_term>.*?)\n.*?(?P<context>.*)', block, re.DOTALL)
-            if match:
-                korean_term = match.group('korean_term').strip()
-                context = match.group('context').strip().replace("※", "")
-                reference_dict[korean_term] = context
+        
+        # Strategy 1: Try parsing with "原文：" markers
+        if '原文：' in content:
+            blocks = content.split('原文：')[1:]
+            for block in blocks:
+                match = re.search(r'^(?P<korean_term>.*?)\n.*?(?P<context>.*)', block, re.DOTALL)
+                if match:
+                    korean_term = match.group('korean_term').strip()
+                    ctx = match.group('context').strip().replace("※", "")
+                    reference_dict[korean_term] = ctx
+
+        # Strategy 2: Fallback to Raw Text Search if Strategy 1 found nothing or very few
+        # (Or we can just do this for any missing term later, but pre-building is better for performance if possible)
+        # Let's do a hybrid approach: Pre-build if markers exist, otherwise strict search on demand (or pre-build for all terms now)
+        
+        if not reference_dict:
+            # Treat as raw novel text
+            # For each term in glossary, find it in content
+            lines = content.split('\n')
+            for term in glossary_df['src'].unique():
+                term = term.strip()
+                if not term: continue
+                
+                # Simple search: find first occurrence of term and extract surrounding lines
+                # To be more robust, we could find the line with the term
+                found_ctx = []
+                for i, line in enumerate(lines):
+                    if term in line:
+                        # Extract this line and maybe previous/next for context
+                        start = max(0, i - 1)
+                        end = min(len(lines), i + 2)
+                        ctx_block = "\n".join(lines[start:end]).strip()
+                        found_ctx.append(ctx_block)
+                        if len(found_ctx) >= 1: break # Just take the first meaningful occurrence
+                
+                if found_ctx:
+                    reference_dict[term] = found_ctx[0]
         
         return glossary_df, reference_dict, original_cols
 
