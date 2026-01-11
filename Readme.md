@@ -12,16 +12,20 @@
 ### ✨ 主要功能
 
 *   **AI 智能审查**: 自动分析术语的准确性、一致性和必要性。
+*   **多轮审查 (New)**: 支持设置 1-10 轮审查，AI 会基于上一轮的结果持续优化，提高准确率。
 *   **批量处理**: 支持并行处理大量术语，高效快速。
 *   **可视化看板**: 实时监控审查进度和 AI 执行日志。
 *   **Excel 自动过滤**: 生成的最终术语表自带筛选功能，方便后续整理。
-*   **修改日志**: 详细记录 AI 的每一次修改和删除操作及其理由。
+*   **详细日志**: 
+    *   **修改日志**: 记录每一次修改/删除操作、理由以及发生在哪一轮审查 (轮次追踪)。
+    *   **中间结果**: 每一轮审查的中间文件会自动保存在 `log/` 目录下（如 `glossary_output_1.xlsx`），方便回溯。
+*   **智能原文匹配**: 即使参考文本没有格式化标记，也能自动在原文中定位术语上下文。
 *   **跨平台支持**: 提供 Windows 可执行文件，同时也支持通过源码在 Mac/Linux 上运行。
 
 ### 📸 界面预览
 
 #### 1. 运行看板 (Dashboard)
-实时查看任务进度和后台日志。
+实时查看任务进度和后台日志。支持设置**审查轮次**。
 ![Dashboard](public/dashboard.png)
 
 #### 2. 任务设置 (Task Setup)
@@ -29,7 +33,7 @@
 ![Task Setup](public/%E4%BB%BB%E5%8A%A1.png)
 
 #### 3. 审查结果 (Results)
-查看 AI 的修改建议和详细理由。
+查看 AI 的修改建议。新增**“轮次”**列，显示修改发生的阶段。
 ![Results](public/result.png)
 
 #### 4. 系统设置 (Settings)
@@ -52,10 +56,12 @@
     *   进入 **任务 (Task)** 页面。
     *   选择包含 `.xlsx` 术语表和 `.txt` 参考文本的文件夹。
     *   输入小说背景设定（有助于 AI 更准确地判断）。
+    *   进入 **运行看板 (Dashboard)**，设置 **审查轮次** (建议 1-3 轮)。
     *   点击 **开始审查**。
 5.  **查看结果**:
-    *   审查完成后，结果文件 `glossary_output.xlsx` (最终术语表) 和 `modified.xlsx` (修改日志) 会生成在您选择的文件夹中。
-    *   您也可以在 **结果 (Results)** 页面直接查看修改详情。
+    *   审查完成后，结果文件 `glossary_output_final.xlsx` (最终术语表) 和 `modified.xlsx` (总修改日志) 会生成在您选择的文件夹中。
+    *   中间过程文件保存在 `log/` 子文件夹中。
+    *   您也可以在 **结果 (Results)** 页面直接查看修改详情和轮次。
 
 ---
 
@@ -111,10 +117,14 @@ npm run dev
 ### ✨ Key Features
 
 *   **AI-Powered Review**: Automatically analyzes term accuracy, consistency, and necessity.
+*   **Multi-Round Review (New)**: Supports 1-10 review rounds. The AI iteratively refines the results based on the previous round for higher accuracy.
 *   **Batch Processing**: Supports parallel processing for high efficiency.
-*   **Visual Dashboard**: Real-time monitoring of review progress and execution logs.
+*   **Visual Dashboard**: Real-time monitoring of review progress and logs.
 *   **Excel AutoFilter**: Generated glossaries come with auto-filters for easy sorting.
-*   **Modification Log**: Detailed records of every AI modification/deletion with justifications.
+*   **Detailed Logging**:
+    *   **Modification Log**: Records every change with reason and the specific **Review Round**.
+    *   **Intermediate Stash**: Automatically saves intermediate results for each round in a `log/` subdirectory (e.g., `glossary_output_1.xlsx`).
+*   **Smart Context Matching**: Automatically locates term context in raw novel text, even without formatted markers.
 *   **Cross-Platform**: Available as a Windows executable, and runs from source on Mac/Linux.
 
 ### 🚀 Usage Guide (Windows)
@@ -122,8 +132,14 @@ npm run dev
 1.  **Download**: Go to the [Release Page](https://github.com/oodadoudou/Korean_glossary_AI_review_UI/releases) and download the latest package (zip file).
 2.  **Run**: Double-click to start.
 3.  **Configure**: Go to **Settings**, enter your API Key, and save.
-4.  **Start**: Go to **Task**, select your working directory (containing `.xlsx` glossary and `.txt` reference), input the novel background, and click **Start**.
-5.  **Result**: Check `glossary_output.xlsx` in your folder or view details in the **Results** tab.
+4.  **Start**: 
+    *   Go to **Task**, select your working directory (containing `.xlsx` glossary and `.txt` reference), and input the novel background.
+    *   Go to **Dashboard**, set **Review Rounds** (1-3 recommended).
+    *   Click **Start Review**.
+5.  **Result**: 
+    *   Check `glossary_output_final.xlsx` (final result) and `modified.xlsx` (log) in your folder. 
+    *   Intermediate files are in `log/` folder.
+    *   View details in the **Results** tab.
 
 ### 💻 Run from Source (Mac/Linux)
 
