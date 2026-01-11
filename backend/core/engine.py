@@ -205,14 +205,14 @@ class ReviewEngine:
                 current_df = pd.DataFrame(round_rows)
                 
                 # Save Intermediate Files (Stash)
-                stash_glossary_path = os.path.join(log_dir, f'glossary_output_stash{round_num}.xlsx')
+                stash_glossary_path = os.path.join(log_dir, f'glossary_output_{round_num}.xlsx')
                 self._save_excel(current_df, stash_glossary_path)
                 
                 # We also need to save the modification log up to this point?
                 # The user asked for "intermediate files... in log...". 
                 # Let's save a snapshot of the log for this round.
                 round_log = [l for l in master_modification_log if l['round'] == round_num]
-                stash_log_path = os.path.join(log_dir, f'modified_stash{round_num}.xlsx')
+                stash_log_path = os.path.join(log_dir, f'modified_{round_num}.xlsx')
                 pd.DataFrame(round_log).to_excel(stash_log_path, index=False)
                 
                 self.add_log(f"Round {round_num} completed. Stash saved to log/.")
