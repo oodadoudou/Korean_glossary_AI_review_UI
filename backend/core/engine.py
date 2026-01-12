@@ -58,6 +58,19 @@ class ReviewEngine:
     def _run_task(self, directory, novel_background, rounds):
         try:
             self.add_log(f"Task started. Total rounds: {rounds}")
+            
+            # --- Pre-flight API Key Validation ---
+            self.add_log("Performing pre-flight API key validation...")
+            valid_count = self.ai_service.validate_keys(log_callback=self.add_log)
+            
+            if valid_count == 0:
+                self.add_log("CRITICAL ERROR: No valid API keys available. Aborting task.")
+                self.progress["message"] = "Error: All API Keys Invalid"
+                raise Exception("All API keys failed validation. Please check your settings.")
+            
+            self.add_log(f"Pre-flight check passed. {valid_count} keys active.")
+            # -------------------------------------
+
             glossary_path = None
             reference_path = None
             

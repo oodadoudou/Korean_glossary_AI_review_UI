@@ -33,30 +33,74 @@ def prompts():
 def test_connection():
     try:
         config = request.json
-        # Simple test prompt
-        from backend.core.ai_service import AIService
-        # Create a temporary service with the provided config
-        # We need to mock the config loading or pass it directly. 
-        # For simplicity, let's just use the current loaded config but override with provided keys if needed, 
-        # or better, just instantiate AIService with the provided keys.
+        providers = []
         
-        # Since AIService loads config internally, we might need to temporarily save or modify how it works.
-        # However, to avoid side effects, let's just use the openai client directly here for testing.
+        # Check new providers structure
+        if config.get("providers"):
+            providers = config.get("providers")
+        else:
+            # Fallback to legacy single fields
+            raw_keys = config.get("api_key", "")
+            base_url = config.get("base_url")
+            model = config.get("model", "deepseek-chat")
+            
+            if "\n" in raw_keys:
+                keys = [k.strip() for k in raw_keys.split("\n") if k.strip()]
+            else:
+                keys = [raw_keys.strip()] if raw_keys.strip() else []
+                
+            for k in keys:
+                 providers.append({"api_key": k, "base_url": base_url, "model": model})
+
+        if not providers:
+             return jsonify({"status": "error", "message": "No API providers configured"})
+
         import openai
         
-        client = openai.OpenAI(
-            api_key=config.get("api_key"),
-            base_url=config.get("base_url")
-        )
+        results = []
+        valid_count = 0
         
-        response = client.chat.completions.create(
-            model=config.get("model", "deepseek-chat"),
-            messages=[{"role": "user", "content": "Hi"}],
-            max_tokens=5,
-            temperature=0.1
-        )
-        
-        return jsonify({"status": "success", "message": "Connection successful!"})
+        for idx, p in enumerate(providers):
+            key = p.get("api_key", "")
+            base_url = p.get("base_url", "")
+            model = p.get("model", "")
+            
+            masked_key = f"{key[:6]}..." if len(key) > 6 else key
+            provider_name = f"#{idx+1} {model}"
+            
+            try:
+                client = openai.OpenAI(api_key=key, base_url=base_url, timeout=10.0)
+                
+                # Dynamic prompt to avoid cache
+                import time
+                import random
+                unique_prompt = f"Hi from review tool check {int(time.time())} {random.randint(1000, 9999)}"
+                
+                client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": unique_prompt}],
+                    max_tokens=5
+                )
+                results.append({"key": provider_name, "status": "valid", "msg": "OK"})
+                valid_count += 1
+            except Exception as e:
+                results.append({"key": provider_name, "status": "invalid", "msg": str(e)})
+
+        if valid_count == len(providers):
+            msg = "✅ All Providers Operational!"
+            status = "success"
+        elif valid_count > 0:
+            msg = f"⚠️ Partial: {valid_count}/{len(providers)} providers working."
+            status = "warning"
+        else:
+            msg = "❌ All providers failed."
+            status = "error"
+
+        return jsonify({
+            "status": status,
+            "message": msg,
+            "results": results
+        })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
