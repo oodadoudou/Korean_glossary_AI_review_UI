@@ -93,16 +93,71 @@ class ReviewEngine:
 
             import json
             import concurrent.futures
+            import re
 
             max_workers = self.config.get("MAX_WORKERS", 3)
             batch_size = self.config.get("BATCH_SIZE", 10)
             
             # Master Log to track all changes across all rounds
             master_modification_log = []
+            self.term_history = {} 
+
+            # --- Resume Logic ---
+            start_round = 1
+            latest_round = 0
             
-            current_df = glossary_df.copy()
+            # Check for existing glossary outputs in log dir
+            for f in os.listdir(log_dir):
+                match = re.search(r'glossary_output_(\d+)\.xlsx', f)
+                if match:
+                    r_num = int(match.group(1))
+                    if r_num > latest_round:
+                        latest_round = r_num
             
-            for round_num in range(1, rounds + 1):
+            # Use resume data if available and we haven't exceeded requested rounds
+            if latest_round > 0 and latest_round < rounds:
+                try:
+                    resume_file = os.path.join(log_dir, f'glossary_output_{latest_round}.xlsx')
+                    self.add_log(f"Found interrupt recovery file: {resume_file}")
+                    
+                    # Load the latest state
+                    current_df = pd.read_excel(resume_file, engine='openpyxl').fillna('')
+                    start_round = latest_round + 1
+                    
+                    # Attempt to load term history
+                    history_file = os.path.join(log_dir, 'term_history.json')
+                    if os.path.exists(history_file):
+                        with open(history_file, 'r', encoding='utf-8') as hf:
+                            self.term_history = json.load(hf)
+                        self.add_log(f"Loaded term history from {history_file}")
+                    else:
+                        self.add_log("Warning: No term history found. Consensus skipping may be limited for next round.")
+
+                    # Reconstruct Master Modification Log from previous round logs
+                    for r in range(1, start_round):
+                        mod_file = os.path.join(log_dir, f'modified_{r}.xlsx')
+                        if os.path.exists(mod_file):
+                            try:
+                                mod_df = pd.read_excel(mod_file, engine='openpyxl').fillna('')
+                                master_modification_log.extend(mod_df.to_dict('records'))
+                            except Exception as ex:
+                                self.add_log(f"Failed to load log for Round {r}: {ex}")
+                    
+                    self.add_log(f"Resuming task from Round {start_round}...")
+                    
+                except Exception as e:
+                    self.add_log(f"Failed to resume: {e}. Starting from scratch.")
+                    # Fallback
+                    glossary_df, reference_dict, original_cols = self.processor.load_data(glossary_path, reference_path)
+                    current_df = glossary_df.copy()
+                    start_round = 1
+                    master_modification_log = []
+                    self.term_history = {}
+            else:
+                # Start fresh
+                current_df = glossary_df.copy()
+            
+            for round_num in range(start_round, rounds + 1):
                 if self.stop_event.is_set(): break
                 
                 self.add_log(f"--- Starting Round {round_num}/{rounds} ---")
@@ -119,15 +174,80 @@ class ReviewEngine:
                 for i in range(0, total_rows, batch_size):
                     batches.append(current_df.iloc[i:i+batch_size])
 
-                def process_single_batch(batch_idx, batch_data):
-                    if self.stop_event.is_set(): return None
-                    self.add_log(f"Round {round_num}: Processing batch {batch_idx + 1}...")
-                    return self.processor.process_batch(batch_data, novel_background, reference_dict, log_callback=self.add_log)
-
+                # Initialize term history for consistency checking across rounds
+                # self.term_history is already initialized at start of task, no need to re-init here if we want global history
+                # But wait, code at line 100 initialized it. 
+                # The line 125 "self.term_history = {}" actually CLEARS history every round!
+                # That is WRONG if we want multi-round history.
+                # AND we are missing batch_results_map.
+                
                 round_rows = []
                 batch_results_map = {}
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    def process_single_batch(batch_idx, batch_data):
+                        if self.stop_event.is_set(): return None
+                        
+                        # Optimization: Filter out terms that already reached consensus
+                        rows_to_process = []
+                        cached_results_map = {} # index in batch -> result
+                        
+                        for local_idx, (idx, row) in enumerate(batch_data.iterrows()):
+                            term = str(row['src']).strip()
+                            history = self.term_history.get(term, [])
+                            
+                            # Consensus Check Logic (Skip if Round >= 3 and previous 2 results are identical)
+                            skipped = False
+                            if round_num >= 3 and len(history) >= 2:
+                                r1 = history[-1]
+                                r2 = history[-2]
+                                # Check consistency of key fields
+                                if (r1.get('recommended_translation') == r2.get('recommended_translation') and
+                                    r1.get('should_delete') == r2.get('should_delete')):
+                                    
+                                    # Use the latest result as the cached result
+                                    cached_results_map[local_idx] = r1.copy()
+                                    skipped = True
+                            
+                            if not skipped:
+                                rows_to_process.append(row)
+                        
+                        self.add_log(f"Round {round_num}: Processing batch {batch_idx + 1} ({len(rows_to_process)}/{len(batch_data)} terms)...")
+                        
+                        # If all skipped, return reconstructed immediately
+                        ai_results_partial = []
+                        if rows_to_process:
+                            import pandas as pd
+                            partial_df = pd.DataFrame(rows_to_process)
+                            try:
+                                # Pass term_history to inject history context
+                                ai_results_partial = self.processor.process_batch(
+                                    partial_df, 
+                                    novel_background, 
+                                    reference_dict, 
+                                    term_history=self.term_history, # Pass history map
+                                    log_callback=self.add_log
+                                )
+                            except Exception as e:
+                                raise e
+                        
+                        # Reconstruct full result list preserving order
+                        full_results = []
+                        partial_idx = 0
+                        
+                        for local_idx in range(len(batch_data)):
+                            if local_idx in cached_results_map:
+                                full_results.append(cached_results_map[local_idx])
+                            else:
+                                if partial_idx < len(ai_results_partial):
+                                    full_results.append(ai_results_partial[partial_idx])
+                                    partial_idx += 1
+                                else:
+                                    # Fallback if partial result missing (shouldn't happen on success)
+                                    full_results.append({}) 
+                                    
+                        return full_results
+
                     future_to_batch = {executor.submit(process_single_batch, i, batch): i for i, batch in enumerate(batches)}
                     
                     for future in concurrent.futures.as_completed(future_to_batch):
@@ -139,6 +259,16 @@ class ReviewEngine:
                         try:
                             ai_results = future.result()
                             batch_results_map[batch_idx] = ai_results
+                            
+                            # Update History (Thread-safe here in main loop)
+                            if ai_results:
+                                batch_rows = batches[batch_idx]
+                                for i, res in enumerate(ai_results):
+                                    if i < len(batch_rows):
+                                        term = str(batch_rows.iloc[i]['src']).strip()
+                                        if term not in self.term_history:
+                                            self.term_history[term] = []
+                                        self.term_history[term].append(res)
                             
                             # Update progress
                             processed_count += batch_size
@@ -228,6 +358,11 @@ class ReviewEngine:
                 stash_log_path = os.path.join(log_dir, f'modified_{round_num}.xlsx')
                 pd.DataFrame(round_log).to_excel(stash_log_path, index=False)
                 
+                # Save Term History for Resume
+                history_path = os.path.join(log_dir, 'term_history.json')
+                with open(history_path, 'w', encoding='utf-8') as hf:
+                    json.dump(self.term_history, hf, ensure_ascii=False, indent=2)
+
                 self.add_log(f"Round {round_num} completed. Stash saved to log/.")
             
             # --- End of All Rounds ---

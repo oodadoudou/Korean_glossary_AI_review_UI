@@ -39,3 +39,6 @@ build/
 dist/
 *.spec
 public/
+
+# Temporary files
+temp/

@@ -8,7 +8,7 @@ export default function Dashboard() {
     const logsEndRef = useRef(null);
     const logsContainerRef = useRef(null);
     const [autoScroll, setAutoScroll] = useState(true);
-    const [rounds, setRounds] = useState(1);
+    const [rounds, setRounds] = useState(3);
 
     useEffect(() => {
         const interval = setInterval(fetchStatus, 1000);

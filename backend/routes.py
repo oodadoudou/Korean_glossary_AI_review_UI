@@ -14,6 +14,8 @@ def config():
     else:
         new_config = request.json
         if save_config(new_config):
+            # Force reload of AI service config to apply new keys immediately
+            engine.ai_service.reload_config()
             return jsonify({"status": "success"})
         return jsonify({"status": "error"}), 500
 
@@ -28,6 +30,34 @@ def prompts():
         if save_config(config):
             return jsonify({"status": "success"})
         return jsonify({"status": "error"}), 500
+
+@api_blueprint.route('/test-prompt', methods=['POST'])
+def test_prompt():
+    data = request.json
+    term = data.get('korean_term')
+    translation = data.get('chinese_translation')
+    context = data.get('context')
+    custom_prompt = data.get('custom_prompt') # Optional
+    
+    # We need the novel background. If not provided, try to load from config or empty
+    # For now, let's use the one from the last task config if available, or empty
+    config = load_config()
+    novel_background = config.get('last_task_context', '')
+    
+    if not term:
+        return jsonify({"error": "Missing term"}), 400
+        
+    try:
+        result = engine.processor.test_single_term(
+            term, 
+            translation, 
+            context, 
+            custom_prompt=custom_prompt,
+            novel_background=novel_background
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @api_blueprint.route('/test-connection', methods=['POST'])
 def test_connection():

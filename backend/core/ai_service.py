@@ -148,9 +148,9 @@ class AIService:
             try:
                 if log_callback:
                     log_callback(f"Sending request to {provider_name} (Attempt {attempt+1})...")
-                    print(f"DEBUG: Sending request to {provider_name}...\n{prompt}") 
-                    log_callback(f"--- REQUEST ---\n{prompt}\n----------------")
-                    log_callback("Waiting for AI response...")
+                    # print(f"DEBUG: Sending request to {provider_name}...\n{prompt}") # Verbose
+                    # log_callback(f"--- REQUEST ---\n{prompt}\n----------------") # Verbose
+                    # log_callback("Waiting for AI response...")
 
                 response = client.chat.completions.create(
                     model=current_model,
@@ -160,10 +160,11 @@ class AIService:
                     timeout=300.0 
                 )
                 content = response.choices[0].message.content
-                print(f"DEBUG: Backend received response (len={len(content)})") 
+                print(f"DEBUG: Backend received response (len={len(content)}) from {provider_name}") 
                 
                 if log_callback:
-                    log_callback(f"--- RESPONSE ---\n{content}\n----------------")
+                    # log_callback(f"--- RESPONSE ---\n{content}\n----------------") # Verbose
+                    log_callback(f"Received response from {provider_name} ({len(content)} chars)")
                 
                 return content
             except openai.RateLimitError:
