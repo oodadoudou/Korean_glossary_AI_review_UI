@@ -90,7 +90,14 @@ def test_connection():
         results = []
         valid_count = 0
         
+        # Load configurable timeout
+        connect_timeout = float(load_config().get("connect_timeout", 120.0))
+        
         for idx, p in enumerate(providers):
+            # Skip if explicitly disabled
+            if not p.get("enabled", True):
+                continue
+
             key = p.get("api_key", "")
             base_url = p.get("base_url", "")
             model = p.get("model", "")
@@ -99,7 +106,7 @@ def test_connection():
             provider_name = f"#{idx+1} {model}"
             
             try:
-                client = openai.OpenAI(api_key=key, base_url=base_url, timeout=10.0)
+                client = openai.OpenAI(api_key=key, base_url=base_url, timeout=connect_timeout)
                 
                 # Dynamic prompt to avoid cache
                 import time
@@ -109,12 +116,23 @@ def test_connection():
                 client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": unique_prompt}],
-                    max_tokens=5
+                    max_tokens=5,
+                    timeout=connect_timeout
                 )
                 results.append({"key": provider_name, "status": "valid", "msg": "OK"})
                 valid_count += 1
+            except openai.APITimeoutError:
+                 results.append({"key": provider_name, "status": "invalid", "msg": f"Timeout ({int(connect_timeout)}s) - Server did not respond in time."})
+            except openai.APIStatusError as e:
+                 # Catching 4xx/5xx errors (AuthenticationError is a subclass of this)
+                 error_code = e.status_code
+                 try:
+                     error_body = e.body.get('message', str(e.body)) if isinstance(e.body, dict) else str(e.body)
+                 except:
+                     error_body = str(e)
+                 results.append({"key": provider_name, "status": "invalid", "msg": f"HTTP {error_code}: {error_body}"})
             except Exception as e:
-                results.append({"key": provider_name, "status": "invalid", "msg": str(e)})
+                results.append({"key": provider_name, "status": "invalid", "msg": f"Error: {str(e)}"})
 
         if valid_count == len(providers):
             msg = "✅ All Providers Operational!"
@@ -132,7 +150,7 @@ def test_connection():
             "results": results
         })
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        return jsonify({"status": "error", "message": f"System Error: {str(e)}"})
 
 @api_blueprint.route('/check-folder', methods=['POST'])
 def check_folder():
@@ -182,29 +200,45 @@ def list_results():
 
 @api_blueprint.route('/results/upload', methods=['POST'])
 def upload_result():
-    if 'file' not in request.files:
-        return jsonify({"status": "error", "message": "No file part"}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"status": "error", "message": "No selected file"}), 400
+    try:
+        if 'file' not in request.files:
+            return jsonify({"status": "error", "message": "No file part"}), 400
         
-    if file and file.filename.endswith('.json'):
-        filename = secure_filename(file.filename)
-        config = load_config()
-        directory = config.get("last_task_directory") or config.get("default_directory", "")
-        
-        if not directory or not os.path.exists(directory):
-            # Fallback to default directory if last_task_directory is invalid
-            directory = config.get("default_directory", ".")
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"status": "error", "message": "No selected file"}), 400
+            
+        # Allow case-insensitive json check
+        if file and file.filename.lower().endswith('.json'):
+            filename = secure_filename(file.filename)
+            config = load_config()
+            
+            # Priority: Last Task Directory -> Default Directory -> Current Directory
+            directory = config.get("last_task_directory")
+            if not directory or not os.path.exists(directory):
+                 directory = config.get("default_directory")
+                 if not directory: 
+                     directory = "." # Fallback to current dir if nothing configured
+            
+            # Ensure directory exists (create if needed, though for last_task usually it should exist)
             if not os.path.exists(directory):
-                os.makedirs(directory)
-                
-        filepath = os.path.join(directory, filename)
-        file.save(filepath)
-        return jsonify({"status": "success", "filename": filename})
-    else:
-        return jsonify({"status": "error", "message": "Invalid file type. Only JSON allowed."}), 400
+                try:
+                    os.makedirs(directory)
+                except Exception as e:
+                     return jsonify({"status": "error", "message": f"Failed to create directory: {e}"}), 500
+                    
+            filepath = os.path.join(directory, filename)
+            file.save(filepath)
+            
+            # If we uploaded to a new directory that isn't the current 'last_task_directory', maybe we should update config?
+            # User intent: "Import generated modified.json to view results". 
+            # If we save it to 'directory', and 'list_results' reads from 'directory', it should show up.
+            
+            return jsonify({"status": "success", "filename": filename})
+        else:
+            return jsonify({"status": "error", "message": "Invalid file type. Only .json files allowed."}), 400
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Upload failed: {str(e)}"}), 500
 
 @api_blueprint.route('/results/content', methods=['GET'])
 def get_result_content():

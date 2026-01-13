@@ -17,6 +17,11 @@ class AIService:
         self.config = load_config()
         self.providers = []
         
+        # Load configurable timeouts (default to safe values for reasoning models)
+        self.request_timeout = float(self.config.get("request_timeout", 600.0))
+        self.connect_timeout = float(self.config.get("connect_timeout", 120.0))
+
+        
         # Check for new 'providers' list structure
         config_providers = self.config.get("providers", [])
         
@@ -37,7 +42,13 @@ class AIService:
                     })
 
         # Initialize clients for all providers
-        for p in config_providers:
+        for idx, p in enumerate(config_providers):
+            # Default enabled to True if missing
+            is_enabled = p.get("enabled", True)
+            
+            if not is_enabled:
+                continue
+                
             api_key = p.get("api_key", "").strip()
             base_url = p.get("base_url", "").strip()
             model = p.get("model", "").strip()
@@ -47,7 +58,7 @@ class AIService:
                     client = openai.OpenAI(
                         api_key=api_key,
                         base_url=base_url,
-                        timeout=300.0
+                        timeout=self.request_timeout
                     )
                     masked_key = f"{api_key[:8]}..." if len(api_key) > 8 else "KEY"
                     self.providers.append({
@@ -55,7 +66,8 @@ class AIService:
                         "model": model,
                         "name": f"{model} @ {base_url} ({masked_key})",
                         "api_key": api_key, # Store for validation / reference
-                        "base_url": base_url
+                        "base_url": base_url,
+                        "enabled": True
                     })
                 except Exception as e:
                     print(f"Error initializing provider {model}: {e}")
@@ -80,7 +92,7 @@ class AIService:
                 check_client = openai.OpenAI(
                     api_key=provider['api_key'],
                     base_url=provider['base_url'],
-                    timeout=10.0
+                    timeout=self.connect_timeout
                 )
                 
                 # Use a unique prompt to prevent caching from upstream proxies
@@ -157,7 +169,7 @@ class AIService:
                     messages=[{"role": "user", "content": prompt}],
                     max_tokens=8192,
                     temperature=0.1,
-                    timeout=300.0 
+                    timeout=self.request_timeout
                 )
                 content = response.choices[0].message.content
                 print(f"DEBUG: Backend received response (len={len(content)}) from {provider_name}") 
@@ -181,6 +193,29 @@ class AIService:
                 err_msg = f"API request timed out (Attempt {attempt+1})."
                 print(err_msg)
                 if log_callback: log_callback(err_msg)
+                if attempt == max_retries - 1:
+                    return None
+            except openai.APIStatusError as e:
+                # Catching 4xx/5xx errors
+                error_code = e.status_code
+                try:
+                    error_body = e.body.get('message', str(e.body)) if isinstance(e.body, dict) else str(e.body)
+                except:
+                    error_body = str(e)
+                err_msg = f"API Error {error_code}: {error_body}"
+                print(err_msg)
+                if log_callback: log_callback(err_msg)
+                
+                # Check for 429 specifically handled above? No, RateLimitError is separate. 
+                # For other errors, we might want to retry if 5xx, but maybe not 4xx.
+                if error_code >= 500:
+                    # Retry on server errors
+                    pass 
+                else: 
+                     # Return None immediately on 4xx (auth, bad request) to avoid wasting retries?
+                     # For now, safe default is retry or return None at end.
+                     pass
+
                 if attempt == max_retries - 1:
                     return None
             except Exception as e:

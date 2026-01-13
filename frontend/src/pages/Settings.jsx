@@ -114,6 +114,27 @@ export default function SettingsPage() {
                             </button>
                         </div>
 
+                        <div className="flex gap-2 mb-4">
+                            <button
+                                onClick={() => {
+                                    const newProviders = config.providers.map(p => ({ ...p, enabled: true }));
+                                    setConfig({ ...config, providers: newProviders });
+                                }}
+                                className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                            >
+                                全选 (Select All)
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const newProviders = config.providers.map(p => ({ ...p, enabled: false }));
+                                    setConfig({ ...config, providers: newProviders });
+                                }}
+                                className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                            >
+                                全不选 (Deselect All)
+                            </button>
+                        </div>
+
                         <div className="space-y-4">
                             {config.providers && config.providers.map((provider, index) => (
                                 <div key={index} className="p-4 border border-gray-200 rounded-lg bg-gray-50 relative group">
@@ -125,42 +146,56 @@ export default function SettingsPage() {
                                         &times;
                                     </button>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        {/* Base URL */}
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Base URL</label>
+                                    <div className="flex items-start gap-3">
+                                        <div className="pt-8">
                                             <input
-                                                type="text"
-                                                value={provider.base_url}
-                                                onChange={(e) => updateProvider(index, 'base_url', e.target.value)}
-                                                onBlur={(e) => updateProvider(index, 'base_url', e.target.value.trim())}
-                                                placeholder="https://api.openai.com/v1"
-                                                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                type="checkbox"
+                                                checked={provider.enabled !== false} // Default to true if undefined
+                                                onChange={(e) => updateProvider(index, 'enabled', e.target.checked)}
+                                                className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                title={provider.enabled !== false ? "Enabled" : "Disabled"}
                                             />
                                         </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
+                                            {/* Base URL */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">Base URL</label>
+                                                <input
+                                                    type="text"
+                                                    value={provider.base_url}
+                                                    onChange={(e) => updateProvider(index, 'base_url', e.target.value)}
+                                                    onBlur={(e) => updateProvider(index, 'base_url', e.target.value.trim())}
+                                                    placeholder="https://api.openai.com/v1"
+                                                    disabled={provider.enabled === false}
+                                                    className={`w-full px-3 py-2 border rounded-md text-sm outline-none ${provider.enabled === false ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-white border-gray-300 focus:ring-1 focus:ring-indigo-500'}`}
+                                                />
+                                            </div>
 
-                                        {/* API Key */}
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">API Key</label>
-                                            <input
-                                                type="password"
-                                                value={provider.api_key}
-                                                onChange={(e) => updateProvider(index, 'api_key', e.target.value)}
-                                                placeholder="sk-..."
-                                                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 outline-none font-mono"
-                                            />
-                                        </div>
+                                            {/* API Key */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">API Key</label>
+                                                <input
+                                                    type="password"
+                                                    value={provider.api_key}
+                                                    onChange={(e) => updateProvider(index, 'api_key', e.target.value)}
+                                                    placeholder="sk-..."
+                                                    disabled={provider.enabled === false}
+                                                    className={`w-full px-3 py-2 border rounded-md text-sm outline-none font-mono ${provider.enabled === false ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-white border-gray-300 focus:ring-1 focus:ring-indigo-500'}`}
+                                                />
+                                            </div>
 
-                                        {/* Model */}
-                                        <div>
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">模型名称 (Model)</label>
-                                            <input
-                                                type="text"
-                                                value={provider.model}
-                                                onChange={(e) => updateProvider(index, 'model', e.target.value)}
-                                                placeholder="gpt-3.5-turbo"
-                                                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-sm focus:ring-1 focus:ring-indigo-500 outline-none"
-                                            />
+                                            {/* Model */}
+                                            <div>
+                                                <label className="block text-xs font-medium text-gray-500 mb-1">模型名称 (Model)</label>
+                                                <input
+                                                    type="text"
+                                                    value={provider.model}
+                                                    onChange={(e) => updateProvider(index, 'model', e.target.value)}
+                                                    placeholder="gpt-3.5-turbo"
+                                                    disabled={provider.enabled === false}
+                                                    className={`w-full px-3 py-2 border rounded-md text-sm outline-none ${provider.enabled === false ? 'bg-gray-100 text-gray-400 border-gray-200' : 'bg-white border-gray-300 focus:ring-1 focus:ring-indigo-500'}`}
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -205,12 +240,19 @@ export default function SettingsPage() {
                             <h4 className="text-sm font-medium text-gray-700 mb-2">连接测试详情:</h4>
                             <div className="max-h-40 overflow-y-auto space-y-2 bg-gray-50 p-3 rounded-lg">
                                 {testResults.map((res, idx) => (
-                                    <div key={idx} className="flex items-center justify-between text-xs">
-                                        <span className="font-mono text-gray-600">{res.key}</span>
-                                        {res.status === 'valid' ? (
-                                            <span className="text-green-600 font-medium flex items-center gap-1">✅ OK</span>
-                                        ) : (
-                                            <span className="text-red-600 font-medium flex items-center gap-1" title={res.msg}>❌ Fail</span>
+                                    <div key={idx} className="flex flex-col text-xs py-2 border-b border-gray-100 last:border-0">
+                                        <div className="flex justify-between items-center w-full">
+                                            <span className="font-mono text-gray-600 font-medium">{res.key}</span>
+                                            {res.status === 'valid' ? (
+                                                <span className="text-green-600 font-medium flex items-center gap-1">✅ OK</span>
+                                            ) : (
+                                                <span className="text-red-500 font-medium flex items-center gap-1">❌ Failed</span>
+                                            )}
+                                        </div>
+                                        {res.status !== 'valid' && (
+                                            <div className="mt-1.5 text-red-600 bg-red-50 p-2 rounded text-xs break-all leading-relaxed">
+                                                {res.msg}
+                                            </div>
                                         )}
                                     </div>
                                 ))}
@@ -244,6 +286,7 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </div>
+
         </div>
     );
 }
