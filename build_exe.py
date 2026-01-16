@@ -15,7 +15,7 @@ if not os.path.exists(FRONTEND_DIST):
 
 print("Starting build process...")
 
-# Collect dependencies for pythonnet and webview
+# Collect dependencies for pythonnet, clr_loader, and webview
 # These packages often have hidden imports and binaries that standard PyInstaller analysis misses
 packages_to_collect = ['pythonnet', 'clr_loader', 'webview']
 collected_datas = []
@@ -55,7 +55,12 @@ else:
 manual_hidden_imports = [
     'engineio.async_drivers.threading',
     'System',
+    'System.IO',
     'System.Windows.Forms',
+    'clr_loader',
+    'clr_loader.util',
+    'clr_loader.util.find',
+    'pythonnet',
 ]
 hidden_import_args.extend([f'--hidden-import={h}' for h in manual_hidden_imports])
 
