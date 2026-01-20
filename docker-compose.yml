@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "5555:5000"
+    volumes:
+      # Mount configuration file
+      - ./cfg.json:/app/cfg.json
+      # Mount Downloads directory to allow accessing files
+      # Logic in app defaults to ~/Downloads, which is /root/Downloads in container
+      - ${HOME}/Downloads:/root/Downloads
+    environment:
+      - FLASK_ENV=production
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
