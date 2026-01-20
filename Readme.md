@@ -31,7 +31,6 @@
 
 #### 2. 任务设置 (Task Setup)
 配置文件夹和小说背景。
-![Task Setup](public/resources.jpg)
 ![Mission Settings](public/settings.jpg)
 
 #### 3. 审查结果 (Results)
