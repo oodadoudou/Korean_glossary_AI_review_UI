@@ -228,6 +228,8 @@ class ReviewEngine:
                                     term_history=self.term_history, # Pass history map
                                     log_callback=self.add_log
                                 )
+                                if ai_results_partial is None:
+                                    ai_results_partial = []
                             except Exception as e:
                                 raise e
                         

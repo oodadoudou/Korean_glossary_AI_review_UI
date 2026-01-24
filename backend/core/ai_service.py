@@ -142,13 +142,14 @@ class AIService:
 
         max_retries = 3
         base_retry_delay = 5
+        attempt = 0
 
-        for attempt in range(max_retries):
+        while attempt < max_retries:
             # Rotate provider for each attempt
             try:
                 provider = self.get_next_provider()
                 client = provider['client']
-                # Use provider's specific model unless override provided (which is rare now)
+                # Use provider's specific model unless override provided
                 current_model = provider['model'] 
                 provider_name = provider['name']
             except Exception as e:
@@ -159,10 +160,7 @@ class AIService:
 
             try:
                 if log_callback:
-                    log_callback(f"Sending request to {provider_name} (Attempt {attempt+1})...")
-                    # print(f"DEBUG: Sending request to {provider_name}...\n{prompt}") # Verbose
-                    # log_callback(f"--- REQUEST ---\n{prompt}\n----------------") # Verbose
-                    # log_callback("Waiting for AI response...")
+                    log_callback(f"Sending request to {provider_name} (Attempt {attempt+1}/{max_retries})...")
 
                 response = client.chat.completions.create(
                     model=current_model,
@@ -172,13 +170,24 @@ class AIService:
                     timeout=self.request_timeout
                 )
                 content = response.choices[0].message.content
+                
+                if content is None:
+                     if max_retries < 6:
+                        max_retries = 6
+                        if log_callback: log_callback("⚠️ Received None content. Increasing max retries to 6.")
+                     
+                     if log_callback: log_callback("Received empty response (None). Waiting 20s before retry...")
+                     time.sleep(20)
+                     attempt += 1
+                     continue
+
                 print(f"DEBUG: Backend received response (len={len(content)}) from {provider_name}") 
                 
                 if log_callback:
-                    # log_callback(f"--- RESPONSE ---\n{content}\n----------------") # Verbose
                     log_callback(f"Received response from {provider_name} ({len(content)} chars)")
                 
                 return content
+
             except openai.RateLimitError:
                 if log_callback: log_callback("Rate limit error. Retrying...")
                 if not self.rate_limit_pause_event.is_set():
@@ -189,12 +198,12 @@ class AIService:
 
                 if attempt == max_retries - 1:
                     self.rate_limit_pause_event.clear()
+
             except openai.APITimeoutError:
                 err_msg = f"API request timed out (Attempt {attempt+1})."
                 print(err_msg)
                 if log_callback: log_callback(err_msg)
-                if attempt == max_retries - 1:
-                    return None
+
             except openai.APIStatusError as e:
                 # Catching 4xx/5xx errors
                 error_code = e.status_code
@@ -206,23 +215,23 @@ class AIService:
                 print(err_msg)
                 if log_callback: log_callback(err_msg)
                 
-                # Check for 429 specifically handled above? No, RateLimitError is separate. 
-                # For other errors, we might want to retry if 5xx, but maybe not 4xx.
-                if error_code >= 500:
-                    # Retry on server errors
-                    pass 
-                else: 
-                     # Return None immediately on 4xx (auth, bad request) to avoid wasting retries?
-                     # For now, safe default is retry or return None at end.
-                     pass
-
-                if attempt == max_retries - 1:
-                    return None
+                # Special handling for 500 "Usage limited" or "No available credentials"
+                error_body_str = str(error_body).lower()
+                if error_code == 500 and ("usage limited" in error_body_str or "当前无可用凭证" in error_body_str):
+                    if max_retries < 6:
+                        max_retries = 6
+                        if log_callback: log_callback("⚠️ 500 Usage Limited/No Creds detected. Increasing max retries to 6.")
+                    
+                    # Backoff for usage limited
+                    wait_time = (base_retry_delay * (2 ** attempt)) + random.uniform(2, 5)
+                    if log_callback: log_callback(f"Waiting {wait_time:.1f}s before retry...")
+                    time.sleep(wait_time)
+                
             except Exception as e:
                 err_msg = f"API request failed with {provider_name}. Error: {e}"
                 print(err_msg)
                 if log_callback: log_callback(err_msg)
-                # Don't fail immediately, retry with next provider
-                if attempt == max_retries - 1:
-                    return None
+            
+            attempt += 1
+
         return None
