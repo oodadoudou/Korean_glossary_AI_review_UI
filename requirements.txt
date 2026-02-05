@@ -6,3 +6,6 @@ xlsxwriter
 openai
 tqdm
 requests
+pythonnet
+clr_loader
+cffi

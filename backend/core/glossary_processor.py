@@ -37,8 +37,31 @@ class GlossaryProcessor:
         else:
             glossary_df['frequency'] = 1
 
-        with open(reference_path, 'r', encoding='utf-8') as f:
-            content = f.read().replace('\r\n', '\n').replace('\r', '\n')
+        content = ""
+        encodings_to_try = ['utf-8', 'utf-8-sig', 'utf-16', 'cp949', 'gbk']
+        
+        for enc in encodings_to_try:
+            try:
+                with open(reference_path, 'r', encoding=enc) as f:
+                    content = f.read().replace('\r\n', '\n').replace('\r', '\n')
+                break # Success
+            except UnicodeDecodeError:
+                continue
+        
+        if not content:
+             # Final attempt with errors='ignore' if strictly needed, or just raise
+             # But usually one of the above works. If all fail, let's try one last time with ignore or let the error bubble up from a specific attempt?
+             # Better to fail loudly if we can't read at all, but let's try to be helpful.
+             # If completely empty or failed all, we might want to raise. 
+             # Let's assume if content is still empty and file is not empty, it failed.
+             # Actually, if the file is truly empty, content is empty string.
+             # We should check if we successfully read it.
+             pass
+        
+        if not content and os.path.getsize(reference_path) > 0:
+             # Attempt with errors='replace' as last resort
+             with open(reference_path, 'r', encoding='utf-8', errors='replace') as f:
+                  content = f.read().replace('\r\n', '\n').replace('\r', '\n')
         
         reference_dict = {}
         

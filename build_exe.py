@@ -17,7 +17,7 @@ print("Starting build process...")
 
 # Collect dependencies for pythonnet, clr_loader, and webview
 # These packages often have hidden imports and binaries that standard PyInstaller analysis misses
-packages_to_collect = ['pythonnet', 'clr_loader', 'webview']
+packages_to_collect = ['pythonnet', 'clr_loader', 'webview', 'cffi']
 collected_datas = []
 collected_binaries = []
 collected_hidden_imports = []
