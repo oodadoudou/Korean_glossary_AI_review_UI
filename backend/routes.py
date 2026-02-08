@@ -106,7 +106,12 @@ def test_connection():
             provider_name = f"#{idx+1} {model}"
             
             try:
-                client = openai.OpenAI(api_key=key, base_url=base_url, timeout=connect_timeout)
+                client = openai.OpenAI(
+                    api_key=key, 
+                    base_url=base_url, 
+                    timeout=connect_timeout,
+                    default_headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                )
                 
                 # Dynamic prompt to avoid cache
                 import time

@@ -58,7 +58,8 @@ class AIService:
                     client = openai.OpenAI(
                         api_key=api_key,
                         base_url=base_url,
-                        timeout=self.request_timeout
+                        timeout=self.request_timeout,
+                        default_headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
                     )
                     masked_key = f"{api_key[:8]}..." if len(api_key) > 8 else "KEY"
                     self.providers.append({
@@ -92,7 +93,8 @@ class AIService:
                 check_client = openai.OpenAI(
                     api_key=provider['api_key'],
                     base_url=provider['base_url'],
-                    timeout=self.connect_timeout
+                    timeout=self.connect_timeout,
+                    default_headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
                 )
                 
                 # Use a unique prompt to prevent caching from upstream proxies
