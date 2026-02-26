@@ -42,3 +42,6 @@ public/
 
 # Temporary files
 temp/
+
+# Agents
+.claude/
