@@ -138,14 +138,18 @@ class GlossaryProcessor:
                     else:
                         history_context = "之前已建议删除"
 
+            # Safe NaN handling for info column: NaN != NaN is True (standard Python NaN idiom)
+            raw_info = row.get('info', '')
+            info_str = '' if (raw_info != raw_info) else str(raw_info)
+
             batch_list.append({
                 "korean_term": korean_term,
                 "chinese_translation": row['dst'].strip(),
                 "tier": tier,
                 "instruction": instruction,
                 "history_context": history_context,
-                "is_character": any(keyword in str(row.get('info', '')) for keyword in character_keywords),
-                "current_category": str(row.get('info', '')).strip(),
+                "is_character": any(keyword in info_str for keyword in character_keywords),
+                "current_category": info_str.strip(),
                 "context": reference_dict.get(korean_term, f"未在参考文件中找到术语 '{korean_term}' 的上下文。")
             })
 
@@ -318,6 +322,7 @@ class GlossaryProcessor:
             "instruction": "【测试模式】请根据提供的上下文和设定进行判定。",
             "history_context": None,
             "is_character": False,
+            "current_category": "",
             "context": context if context else "无上下文"
         }]
 
