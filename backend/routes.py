@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 from backend.core.engine import ReviewEngine
 from backend.config_manager import load_config, save_config
+from backend.version import __version__
+from backend.updater import check_for_updates, perform_update
 import os
 
 api_blueprint = Blueprint('api', __name__)
@@ -297,3 +299,29 @@ def stop_task():
 @api_blueprint.route('/status', methods=['GET'])
 def get_status():
     return jsonify(engine.get_status())
+
+@api_blueprint.route('/version', methods=['GET'])
+def get_version():
+    return jsonify({"version": __version__})
+
+@api_blueprint.route('/check-update', methods=['GET'])
+def check_update():
+    is_available, info = check_for_updates()
+    return jsonify({
+        "is_available": is_available,
+        "info": info
+    })
+
+@api_blueprint.route('/do-update', methods=['POST'])
+def do_update():
+    data = request.json or {}
+    download_url = data.get('download_url')
+    if not download_url:
+        return jsonify({"status": "error", "message": "Missing download URL"}), 400
+        
+    # This function will eventually call os._exit(0) shutting down the server
+    # We can try to return a response before that, or the client can just expect a hang/close
+    success, msg = perform_update(download_url)
+    
+    # If it fails, it returns here. If it succeeds, the process dies before returning.
+    return jsonify({"status": "error", "message": msg}), 500

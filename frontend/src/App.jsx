@@ -7,6 +7,7 @@ import Prompts from './pages/Prompts';
 
 import Results from './pages/Results';
 import Resources from './pages/Resources';
+import UpdateNotifier from './components/UpdateNotifier';
 
 function App() {
     const [activeTab, setActiveTab] = useState('setup');
@@ -73,9 +74,7 @@ function App() {
                     />
                 </nav>
 
-                <div className="p-4 border-t border-gray-200 text-xs text-gray-500">
-                    v1.0.0
-                </div>
+                <UpdateNotifier />
             </div>
 
             {/* Main Content */}

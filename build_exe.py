@@ -1,58 +1,66 @@
 import PyInstaller.__main__
 import os
 import shutil
-from PyInstaller.utils.hooks import collect_all
+import sys
 
-# Define paths
+# Define base paths
 BASE_DIR = os.getcwd()
 FRONTEND_DIST = os.path.join(BASE_DIR, 'frontend', 'dist')
-ENTRY_POINT = os.path.join(BASE_DIR, 'run.py')
+ENTRY_POINT = os.path.join(BASE_DIR, 'run_safe.py') # MIGRATED TO SAFE ENTRY POINT
 
 # Verify frontend build exists
 if not os.path.exists(FRONTEND_DIST):
     print("Error: Frontend build not found. Please run 'npm run build' in frontend directory first.")
     exit(1)
 
-print("Starting build process...")
+print("Starting robust build process...")
 
-# Collect dependencies for pythonnet, clr_loader, and webview
-# These packages often have hidden imports and binaries that standard PyInstaller analysis misses
-packages_to_collect = ['pythonnet', 'clr_loader', 'webview', 'cffi']
-collected_datas = []
-collected_binaries = []
-collected_hidden_imports = []
+# 1. CORE DATA AND DLL HOOKS
+add_data_args = []
+add_binary_args = []
 
-print("Collecting runtime data and binaries for: " + ", ".join(packages_to_collect))
-for package in packages_to_collect:
-    try:
-        datas, binaries, hiddenimports = collect_all(package)
-        collected_datas.extend(datas)
-        collected_binaries.extend(binaries)
-        collected_hidden_imports.extend(hiddenimports)
-    except Exception as e:
-        print(f"Warning: Failed to collect data for {package}: {e}")
+# Fetch WebView2 DLLs dynamically based on current environment
+import webview
+webview_lib_dir = os.path.join(os.path.dirname(webview.__file__), 'lib')
 
-# Format for PyInstaller
-# --add-data "src;dest" (Windows)
-add_data_args = [f'--add-data={src};{dest}' for src, dest in collected_datas]
-add_binary_args = [f'--add-binary={src};{dest}' for src, dest in collected_binaries]
-hidden_import_args = [f'--hidden-import={h}' for h in collected_hidden_imports]
+if os.path.exists(webview_lib_dir):
+    print(f"Collecting WebView2 architecture dependent DLLs from: {webview_lib_dir}")
+    # Walk the lib directory to guarantee all arch runtimes are included (win-x64, win-arm64, win-x86)
+    for root, dirs, files in os.walk(webview_lib_dir):
+        for file in files:
+            if file.endswith('.dll') or file.endswith('.jar'):
+                src_path = os.path.join(root, file)
+                # Calculate relative destination string path inside package
+                rel_path = os.path.relpath(root, webview_lib_dir)
+                dest_dir = 'webview/lib' if rel_path == '.' else f'webview/lib/{rel_path}'
+                dest_dir = dest_dir.replace('\\', '/') # Ensure correct internal formatting
+                
+                add_binary_args.append(f'--add-binary={src_path};{dest_dir}')
+else:
+    print("CRITICAL WARNING: WebView library paths not found. Program will likely crash.")
 
-# Explicitly find and add Python.Runtime.dll
+# Explicitly collect Pythonnet
 import pythonnet
 pythonnet_dir = os.path.dirname(pythonnet.__file__)
 runtime_dll_path = os.path.join(pythonnet_dir, 'runtime', 'Python.Runtime.dll')
 
 if os.path.exists(runtime_dll_path):
-    print(f"Explicitly adding Python.Runtime.dll from: {runtime_dll_path}")
-    # Add to both root and pythonnet folder to be safe
+    print(f"Explicitly enforcing Python.Runtime.dll from: {runtime_dll_path}")
+    # Inject it directly into root AND pythonnet/runtime to survive ClrLoader searches
     add_binary_args.append(f'--add-binary={runtime_dll_path};.')
     add_binary_args.append(f'--add-binary={runtime_dll_path};pythonnet/runtime')
-else:
-    print(f"Warning: Python.Runtime.dll not found at expected path: {runtime_dll_path}")
 
-# Manual hidden imports (explicitly safe to add)
-manual_hidden_imports = [
+# Explicitly collect clr_loader architecture DLLs
+import clr_loader
+clr_loader_dir = os.path.join(os.path.dirname(clr_loader.__file__), 'ffi', 'dlls')
+if os.path.exists(clr_loader_dir):
+    for march in ['amd64', 'x86']:
+        dll_src = os.path.join(clr_loader_dir, march, 'ClrLoader.dll')
+        if os.path.exists(dll_src):
+             add_binary_args.append(f'--add-binary={dll_src};clr_loader/ffi/dlls/{march}')
+
+# 2. HIDDEN IMPORTS
+hidden_imports = [
     'engineio.async_drivers.threading',
     'System',
     'System.IO',
@@ -61,42 +69,42 @@ manual_hidden_imports = [
     'clr_loader.util',
     'clr_loader.util.find',
     'pythonnet',
+    'app',                 # Make sure the delegated app module is frozen
+    'backend',
+    'backend.core',
+    'backend.version',
+    'backend.updater',
+    'requests'
 ]
-hidden_import_args.extend([f'--hidden-import={h}' for h in manual_hidden_imports])
+hidden_import_args = [f'--hidden-import={h}' for h in hidden_imports]
 
-# Construct arguments
+# 3. CONSTRUCT ARGS
 args = [
-    ENTRY_POINT,                            # Entry point
-    '--name=KoreanGlossaryReview',          # Name of the exe
-    '--onedir',                             # One directory bundle
-    '--console',                            # Show console window (Explicitly requested)
-    '--icon=icon.ico',                      # Application Icon
-    f'--add-data={FRONTEND_DIST};frontend/dist', # Include frontend assets
-    '--clean',                              # Clean cache
-    '--noconfirm',                          # Overwrite output directory
+    ENTRY_POINT,                            # Safe Entry point
+    '--name=KoreanGlossaryReview',
+    '--onedir',                             # Directory mode handles heavy Webview DLLs better
+    '--windowed',                           # Hide the DOS popup
+    '--icon=icon.ico',                      
+    f'--add-data={FRONTEND_DIST};frontend/dist', # Complete frontend tree
+    '--clean',                              
+    '--noconfirm',                          
 ]
 
-# Add collected arguments
 args.extend(add_data_args)
 args.extend(add_binary_args)
 args.extend(hidden_import_args)
 
-print(f"Running PyInstaller with {len(args)} arguments...")
-
+print(f"Running PyInstaller with {len(args)} robust target arguments...")
 PyInstaller.__main__.run(args)
 
 print("\nBuild complete. Executable is in dist/KoreanGlossaryReview/KoreanGlossaryReview.exe")
 
-# Copy default config if it doesn't exist in dist
+# 4. POST-BUILD ENVIRONMENT SETTING
 dist_dir = os.path.join(BASE_DIR, 'dist', 'KoreanGlossaryReview')
 config_src = os.path.join(BASE_DIR, 'cfg.json.example')
 config_dst = os.path.join(dist_dir, 'cfg.json')
 
 if os.path.exists(config_src):
-    try:
-        shutil.copy(config_src, config_dst)
-        print(f"Copied default config to {config_dst}")
-    except Exception as e:
-        print(f"Warning: Failed to copy config: {e}")
-else:
-    print("Warning: cfg.json.example not found, skipping config copy.")
+    shutil.copy(config_src, config_dst)
+
+print("Package ready. Launching dist/KoreanGlossaryReview/KoreanGlossaryReview.exe now uses Crash Logger.")
