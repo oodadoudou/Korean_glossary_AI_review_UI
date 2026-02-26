@@ -333,7 +333,7 @@ class ReviewEngine:
                             log_entry['new'] = '(Deleted)'
                             master_modification_log.append(log_entry)
                         else:
-                            recommended = ai_result.get('recommended_translation', '').strip()
+                            recommended = str(ai_result.get('recommended_translation', '') or '').strip()
                             current = original_row.get('dst', '').strip()
 
                             translation_changed = bool(recommended and recommended != current)
