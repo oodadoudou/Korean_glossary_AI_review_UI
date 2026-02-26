@@ -308,17 +308,24 @@ class ReviewEngine:
                     for j, ai_result in enumerate(ai_results):
                         original_row = original_batch.iloc[j].to_dict()
                         final_row = original_row.copy()
-                        
+
+                        # Safe NaN handling for info column
+                        raw_info = original_row.get('info', '')
+                        original_cat = '' if (raw_info != raw_info) else str(raw_info).strip()
+                        suggested_cat = str(ai_result.get('suggested_category', '') or '').strip()
+
                         # Log Entry
                         log_entry = {
-                            'round': round_num, # New Column G
+                            'round': round_num,
                             'term': original_row.get('src', ''),
                             'original': original_row.get('dst', ''),
                             'new': '',
                             'action': '',
                             'reason': ai_result.get('deletion_reason', ''),
                             'justification': ai_result.get('justification', ''),
-                            'emoji': ai_result.get('judgment_emoji', '')
+                            'emoji': ai_result.get('judgment_emoji', ''),
+                            'original_category': original_cat,
+                            'suggested_category': suggested_cat,
                         }
 
                         if ai_result.get('should_delete'):
@@ -328,22 +335,27 @@ class ReviewEngine:
                         else:
                             recommended = ai_result.get('recommended_translation', '').strip()
                             current = original_row.get('dst', '').strip()
-                            
-                            if recommended and recommended != current:
+
+                            translation_changed = bool(recommended and recommended != current)
+                            category_changed = bool(suggested_cat and suggested_cat != original_cat)
+
+                            if translation_changed:
                                 log_entry['action'] = 'Modify'
                                 log_entry['new'] = recommended
-                                final_row['dst'] = recommended # Update for next round!
+                                final_row['dst'] = recommended
+                                master_modification_log.append(log_entry)
+                            elif category_changed:
+                                log_entry['action'] = 'Category'
+                                log_entry['new'] = current  # translation unchanged
                                 master_modification_log.append(log_entry)
                             else:
                                 log_entry['action'] = 'Keep'
                                 log_entry['new'] = current
-                                # Optional: Log 'Keep' actions? The user wants to track "all steps", 
-                                # but usually we only track changes. Let's stick to tracking changes 
-                                # to avoid massive files, unless requested.
-                                # User said "record down all the intermediate modification or ANY steps".
-                                # "Any steps" might imply Keeps too. 
-                                # But let's only log valid actions.
-                            
+
+                            # Apply category update to final glossary for all non-deleted terms
+                            if category_changed:
+                                final_row['info'] = suggested_cat
+
                             round_rows.append(final_row)
                 
                 # End of Round Processing
