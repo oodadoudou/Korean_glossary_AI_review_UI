@@ -118,20 +118,14 @@ def perform_update(download_url):
 chcp 65001 > nul
 echo Please wait while the application updates...
 
-:: Wait a brief moment to allow the calling process to terminate naturally
-ping 127.0.0.1 -n 4 > nul
-
-:: Forcefully kill any lingering processes of the application (e.g. PyWebView edge children)
-taskkill /F /IM "{main_exe_name}" /T > nul 2>&1
-
-:: Double check wait to ensure system file locks are fully released
-ping 127.0.0.1 -n 3 > nul
+:: Wait a moment to allow the calling process to terminate naturally and release file locks
+ping 127.0.0.1 -n 5 > nul
 
 echo Overwriting files...
 :: Adding trailing backslash to the destination avoids xcopy prompting for File/Directory
 :: /E copies subdirectories including empty ones
 :: /Y overwrites without prompting
-:: /C continues copying even if errors occur (like a stubborn lock on one irrelevant file)
+:: /C continues copying even if errors occur 
 xcopy "{source_dir_norm}\\*" "{base_cwd_norm}\\" /E /Y /C /Q
 
 echo Restarting application...
@@ -146,12 +140,14 @@ del "%~f0"
         with open(bat_script_path, 'w', encoding='utf-8') as f:
             f.write(bat_content)
 
-        # 6. Execute the batch script detached
+        # 6. Execute the batch script detached with a NEW CONSOLE
         print("Spawning update script and exiting...")
-        # DETACHED_PROCESS = 0x00000008
+        # CREATE_NEW_CONSOLE = 0x00000010
+        # This is CRITICAL. Without it, the bat script dies the millisecond the parent Python app exits.
+        # It also provides a helpful visual window stating 'Please wait' so the user doesn't panic.
         subprocess.Popen(
             ["cmd.exe", "/c", bat_script_path],
-            creationflags=0x00000008, 
+            creationflags=0x00000010, 
             cwd=base_cwd
         )
 
