@@ -20,17 +20,17 @@ class GlossaryProcessor:
             if "次数" in str(col) or "freq" in str(col).lower() or "count" in str(col).lower():
                 freq_col = col
                 break
-        
+
         rename_map = {original_cols[0]: 'src', original_cols[1]: 'dst'}
         if freq_col:
             rename_map[freq_col] = 'frequency'
-            
+
         glossary_df = glossary_df.rename(columns=rename_map)
-        
+
         # Ensure src and dst are strings
         glossary_df['src'] = glossary_df['src'].fillna('').astype(str)
         glossary_df['dst'] = glossary_df['dst'].fillna('').astype(str)
-        
+
         # Normalize frequency
         if 'frequency' in glossary_df.columns:
             glossary_df['frequency'] = pd.to_numeric(glossary_df['frequency'], errors='coerce').fillna(1).astype(int)
@@ -39,7 +39,7 @@ class GlossaryProcessor:
 
         content = ""
         encodings_to_try = ['utf-8', 'utf-8-sig', 'utf-16', 'cp949', 'gbk']
-        
+
         for enc in encodings_to_try:
             try:
                 with open(reference_path, 'r', encoding=enc) as f:
@@ -47,24 +47,24 @@ class GlossaryProcessor:
                 break # Success
             except UnicodeDecodeError:
                 continue
-        
+
         if not content:
              # Final attempt with errors='ignore' if strictly needed, or just raise
              # But usually one of the above works. If all fail, let's try one last time with ignore or let the error bubble up from a specific attempt?
              # Better to fail loudly if we can't read at all, but let's try to be helpful.
-             # If completely empty or failed all, we might want to raise. 
+             # If completely empty or failed all, we might want to raise.
              # Let's assume if content is still empty and file is not empty, it failed.
              # Actually, if the file is truly empty, content is empty string.
              # We should check if we successfully read it.
              pass
-        
+
         if not content and os.path.getsize(reference_path) > 0:
              # Attempt with errors='replace' as last resort
              with open(reference_path, 'r', encoding='utf-8', errors='replace') as f:
                   content = f.read().replace('\r\n', '\n').replace('\r', '\n')
-        
+
         reference_dict = {}
-        
+
         # Strategy 1: Try parsing with "原文：" markers
         if '原文：' in content:
             blocks = content.split('原文：')[1:]
@@ -78,7 +78,7 @@ class GlossaryProcessor:
         # Strategy 2: Fallback to Raw Text Search if Strategy 1 found nothing or very few
         # (Or we can just do this for any missing term later, but pre-building is better for performance if possible)
         # Let's do a hybrid approach: Pre-build if markers exist, otherwise strict search on demand (or pre-build for all terms now)
-        
+
         if not reference_dict:
             # Treat as raw novel text
             # For each term in glossary, find it in content
@@ -86,7 +86,7 @@ class GlossaryProcessor:
             for term in glossary_df['src'].unique():
                 term = term.strip()
                 if not term: continue
-                
+
                 # Simple search: find first occurrence of term and extract surrounding lines
                 # To be more robust, we could find the line with the term
                 found_ctx = []
@@ -98,25 +98,25 @@ class GlossaryProcessor:
                         ctx_block = "\n".join(lines[start:end]).strip()
                         found_ctx.append(ctx_block)
                         if len(found_ctx) >= 1: break # Just take the first meaningful occurrence
-                
+
                 if found_ctx:
                     reference_dict[term] = found_ctx[0]
-        
+
         return glossary_df, reference_dict, original_cols
 
     def process_batch(self, batch_df, novel_background, reference_dict, term_history=None, log_callback=None):
         batch_list = []
         character_keywords = ['角色', '神祇/传说人物', '男性角色', '女性角色']
-        
+
         for _, row in batch_df.iterrows():
             korean_term = row['src'].strip()
             frequency = row.get('frequency', 1)
-            
+
             # 1. Tier Calculation
             tier = "B"
             instruction = ""
             is_lore = korean_term in novel_background
-            
+
             if is_lore:
                 tier = "S"
                 instruction = "【核心设定词】出现在背景设定中。必须严格保持一致，绝对禁止删除。"
@@ -126,7 +126,7 @@ class GlossaryProcessor:
             elif frequency <= 3:
                 tier = "C"
                 instruction = "【低频词】仅出现1-3次。若判断为通用词汇（非术语，如纯字母、数字、单字、虚词、动词、形容词、副词、介词、连词、助词、感叹词、数词、量词、代词、冠词、语气词等），请大胆建议删除。"
-            
+
             # 2. History Injection
             history_context = None
             if term_history and korean_term in term_history:
@@ -144,10 +144,11 @@ class GlossaryProcessor:
                 "tier": tier,
                 "instruction": instruction,
                 "history_context": history_context,
-                "is_character": any(keyword in row.get('info', '') for keyword in character_keywords),
+                "is_character": any(keyword in str(row.get('info', '')) for keyword in character_keywords),
+                "current_category": str(row.get('info', '')).strip(),
                 "context": reference_dict.get(korean_term, f"未在参考文件中找到术语 '{korean_term}' 的上下文。")
             })
-        
+
         prompt = self._get_batch_prompt(novel_background, batch_list)
         response = self.ai_service.call_api(prompt, log_callback=log_callback)
         return self._parse_json_response(response)
@@ -313,27 +314,27 @@ class GlossaryProcessor:
         batch_list = [{
             "korean_term": term,
             "chinese_translation": translation,
-            "tier": "B (Test)", 
+            "tier": "B (Test)",
             "instruction": "【测试模式】请根据提供的上下文和设定进行判定。",
             "history_context": None,
-            "is_character": False, 
+            "is_character": False,
             "context": context if context else "无上下文"
         }]
 
         # Use custom prompt if provided, else standard logic (but we need to handle the template)
-        # However, _get_batch_prompt expects config prompt. 
+        # However, _get_batch_prompt expects config prompt.
         # If custom_prompt is passed (e.g. from UI textarea), we should use it as the 'user_prompt' part.
-        
+
         # We need a slightly modified version of _get_batch_prompt that accepts an override
         # Or we temporarily patch config (not thread safe)
         # Better: Refactor _get_batch_prompt to accept optional base_prompt override
-        
+
         full_prompt = self._get_batch_prompt(novel_background, batch_list, base_prompt_override=custom_prompt)
-        
+
         # Call API
         response = self.ai_service.call_api(full_prompt)
         parsed = self._parse_json_response(response)
-        
+
         if parsed and isinstance(parsed, list) and len(parsed) > 0:
             return parsed[0]
         return {"error": "Failed to parse AI response", "raw": response}
@@ -346,17 +347,17 @@ class GlossaryProcessor:
             if not user_prompt:
                  # Fallback default if config is empty
                  user_prompt = """角色：专业小说翻译家（V3·批处理模式）
-... (truncated default default for brevity in code, but actually we should keep it or refer to constant) 
+... (truncated default default for brevity in code, but actually we should keep it or refer to constant)
 ... For now let's just use what was there or empty string if config missing.
 """
-                 # Actually, to avoid code duplication, we assume config is loaded roughly correctly or 
+                 # Actually, to avoid code duplication, we assume config is loaded roughly correctly or
                  # we just use the logic from before.
                  pass
 
         # If user_prompt is still empty (and no override), we need that big default block again?
         # To avoid massive duplication in this edit, I will rely on self.config being valid usually.
         # But for valid refactoring, let's keep the existing logic structure.
-        
+
         if not user_prompt and not base_prompt_override:
              user_prompt = """角色：专业小说翻译家（V3·批处理模式）
 
@@ -440,6 +441,19 @@ class GlossaryProcessor:
     - **Tier S (Lore)**: 绝对权威。必须与设定集严格匹配。
     - **Tier A (High Freq)**: 高频出现。通常为重要名词。但若确认为被错误提取的通用常用词（如单字、连词），**请务必标记删除**。
     - **Tier C (Low Freq)**: 能够容忍删除。如果看起来像普通动词、形容词或无意义短语，**请大胆标记为删除 (should_delete=true)**。
+3. **分类审查 (Category Review)**:
+    根据术语原文、上下文和小说背景，判断 `current_category`（现有分类）是否准确，并在 `suggested_category` 字段中返回最准确的分类。
+    分类体系如下（格式：大类/子类）：
+    - `角色` → 男性角色 / 女性角色 / 动物角色 / 历史人物 / 知名人物 / 角色外号 / 昵称 / 小说作者
+    - `地点` → 特定地名 / 通用地名
+    - `组织机构` → 特定组织 / XX机构
+    - `小说设定` → ABO / Nameverse / 哨兵向导 / 猎人能力设定 / 特定世界设定词
+    - `能力技能` → 角色技能 / 特定设定技能
+    - `物品` → 特定物品 / 通用物品 / 特殊物品
+    规则：
+    - 若现有分类已准确，将其标准化为大类/子类格式后原样返回（如 `current_category` 是 "男性角色"，则返回 "角色/男性角色"）
+    - 若现有分类不准确或可细化，返回更准确的大类/子类
+    - 在 `justification` 中同时说明翻译审查和分类审查的理由
 
 小说背景设定:
 {novel_background}
@@ -450,8 +464,8 @@ class GlossaryProcessor:
 ---
 [范例输入]
 [
-  {{ "korean_term": "침대 시트", "chinese_translation": "床单", "tier": "C", "instruction": "【低频词】...", "is_character": false, "context": "그는 침대 시트를 갈았다. (他换了床单。)" }},
-  {{ "korean_term": "현재웅", "chinese_translation": "玄在雄", "tier": "A", "instruction": "【高频词】...", "history_context": "之前已审定为: 玄在雄", "is_character": true, "context": "현재웅은 말했다. (玄在雄说道。)" }}
+  {{ "korean_term": "침대 시트", "chinese_translation": "床单", "tier": "C", "instruction": "【低频词】...", "is_character": false, "current_category": "物品", "context": "그는 침대 시트를 갈았다. (他换了床单。)" }},
+  {{ "korean_term": "현재웅", "chinese_translation": "玄在雄", "tier": "A", "instruction": "【高频词】...", "history_context": "之前已审定为: 玄在雄", "is_character": true, "current_category": "男性角色", "context": "현재웅은 말했다. (玄在雄说道。)" }}
 ]
 
 [范例输出]
@@ -463,7 +477,8 @@ class GlossaryProcessor:
     "should_delete": true,
     "deletion_reason": "通用词",
     "judgment_emoji": "🗑️",
-    "justification": "该术语为通用词（日常词汇），无特殊含义，建议在最终术语表中删除。"
+    "suggested_category": "物品/通用物品",
+    "justification": "该术语为通用词（日常词汇），无特殊含义，建议在最终术语表中删除。分类：通用物品。"
   }},
   {{
     "korean_term": "현재웅",
@@ -472,7 +487,8 @@ class GlossaryProcessor:
     "should_delete": false,
     "deletion_reason": null,
     "judgment_emoji": "✅",
-    "justification": "角色名翻译准确，与背景一致。"
+    "suggested_category": "角色/男性角色",
+    "justification": "角色名翻译准确，与背景一致。分类确认为男性角色。"
   }}
 ]
 ---
@@ -489,7 +505,8 @@ class GlossaryProcessor:
     "should_delete": "[true/false]",
     "deletion_reason": "[通用词/动词/形容词/描述性短语/非角色/其他/null]",
     "judgment_emoji": "[✅/⚠️/❌/🗑️]",
-    "justification": "[简洁、精确的核心理由]"
+    "suggested_category": "[大类/子类，参照上方分类体系]",
+    "justification": "[简洁、精确的核心理由，包含翻译审查和分类审查说明]"
   }}
 ]
 """
