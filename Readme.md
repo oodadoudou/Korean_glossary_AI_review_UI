@@ -20,7 +20,9 @@
 *   **API 管理**: 支持混合配置多个 API（Key/Base URL/模型），自动轮询。
 *   **断点续传**: 任务中断后可从断点恢复。
 *   **多轮审查**: 支持 1-10 轮审查，基于历史记忆持续优化。
-*   **标准化文件**: 中间文件采用 `_n` 后缀管理。
+*   **断点续传 & 标准化文件**: 任务中断后可从断点恢复，中间文件采用 `_n` 后缀管理。
+*   **全自动热更新 (v2.2+)**: 界面一键检测 GitHub Releases 并自动下载覆盖，保留本地配置。
+*   **防静默闪退机制 (v2.2+)**: 内置 `run_safe.py` 底层错误拦截器，如遇依赖缺失自动弹出可视化错误报告并记录日志。
 *   **跨平台**: 支持 Windows (exe)、Docker 及源码运行。
 
 ### 📸 界面预览
@@ -126,9 +128,10 @@ npm run dev
 *   **Context Awareness**: Decisions based on **Weight Tiers**, **Background**, and **Context**.
 *   **Prompt Playground**: Test prompts before batch runs.
 *   **Multi-Provider**: Manage multiple API providers (keys/URLs/models) with auto-rotation.
-*   **Resume Capability**: Resume interrupted tasks from checkpoints.
 *   **Multi-Round**: iteratively refine results (1-10 rounds) with **History Memory**.
-*   **Standardized Files**: Managed via `_n` suffix.
+*   **Resume Capability & Standardized Files**: Resume interrupted tasks and manage intermediate files via `_n` suffix.
+*   **Automated Hot-Updates (v2.2+)**: One-click in-app detection, download, and installation from GitHub Releases while preserving configurations.
+*   **Crash Recovery Logger (v2.2+)**: Built-in `run_safe.py` interceptor prevents silent exits by throwing native visual stack traces and logs for missing environment dependencies.
 *   **Cross-Platform**: Windows (.exe), Docker, or Source.
 
 ### 🚀 Usage Guide (Windows)
@@ -181,8 +184,8 @@ npm run dev
 *   `backend/`: Flask server and core logic (AI service, engine).
 *   `frontend/`: React + Vite UI source code.
 *   `dist/`: Compiled frontend assets and Windows executable.
-*   `run.py`: Application entry point.
-*   `build_exe.py`: PyInstaller build script.
+*   `run_safe.py` & `run.py`: Application safe-boot and standard entry points.
+*   `build_exe.py`: PyInstaller robust build script.
 
 ---
 
