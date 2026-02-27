@@ -7,11 +7,12 @@ from backend.routes import api_blueprint
 
 # Determine if running in a bundle
 if getattr(sys, 'frozen', False):
-    template_folder = os.path.join(sys._MEIPASS, 'frontend/dist')
-    static_folder = os.path.join(sys._MEIPASS, 'frontend/dist/assets')
+    template_folder = os.path.join(sys._MEIPASS, 'frontend', 'dist')
+    static_folder = os.path.join(sys._MEIPASS, 'frontend', 'dist', 'assets')
 else:
-    template_folder = '../frontend/dist'
-    static_folder = '../frontend/dist/assets'
+    base_dir = os.path.abspath(os.path.dirname(__file__))
+    template_folder = os.path.join(base_dir, '..', 'frontend', 'dist')
+    static_folder = os.path.join(base_dir, '..', 'frontend', 'dist', 'assets')
 
 app = Flask(__name__, static_folder=static_folder, template_folder=template_folder)
 app.register_blueprint(api_blueprint, url_prefix='/api')

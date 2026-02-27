@@ -20,8 +20,12 @@ def main():
         error_msg = f"Application crashed unexpectedly:\n{str(e)}\n\n"
         error_msg += traceback.format_exc()
         
-        # Write to local file
-        log_path = os.path.join(os.getcwd(), 'fatal_crash_log.txt')
+        # Write logs next to the executable in frozen mode for consistent user support.
+        if getattr(sys, 'frozen', False):
+            log_base_dir = os.path.dirname(sys.executable)
+        else:
+            log_base_dir = os.getcwd()
+        log_path = os.path.join(log_base_dir, 'fatal_crash_log.txt')
         try:
             with open(log_path, 'w', encoding='utf-8') as f:
                 f.write(error_msg)

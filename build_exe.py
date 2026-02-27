@@ -4,9 +4,10 @@ import shutil
 import sys
 
 # Define base paths
-BASE_DIR = os.getcwd()
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 FRONTEND_DIST = os.path.join(BASE_DIR, 'frontend', 'dist')
 ENTRY_POINT = os.path.join(BASE_DIR, 'run_safe.py') # MIGRATED TO SAFE ENTRY POINT
+ICON_PATH = os.path.join(BASE_DIR, 'icon.ico')
 
 # Verify frontend build exists
 if not os.path.exists(FRONTEND_DIST):
@@ -18,6 +19,16 @@ print("Starting robust build process...")
 # 1. CORE DATA AND DLL HOOKS
 add_data_args = []
 add_binary_args = []
+seen_bundle_pairs = set()
+
+def append_bundle_arg(target_list, switch_name, src_path, dest_dir):
+    src_path = os.path.normpath(src_path)
+    dest_dir = dest_dir.replace('\\', '/')
+    dedupe_key = (switch_name, src_path.lower(), dest_dir)
+    if dedupe_key in seen_bundle_pairs:
+        return
+    seen_bundle_pairs.add(dedupe_key)
+    target_list.append(f'--{switch_name}={src_path};{dest_dir}')
 
 # Fetch WebView2 DLLs dynamically based on current environment
 import webview
@@ -33,22 +44,29 @@ if os.path.exists(webview_lib_dir):
                 # Calculate relative destination string path inside package
                 rel_path = os.path.relpath(root, webview_lib_dir)
                 dest_dir = 'webview/lib' if rel_path == '.' else f'webview/lib/{rel_path}'
-                dest_dir = dest_dir.replace('\\', '/') # Ensure correct internal formatting
-                
-                add_binary_args.append(f'--add-binary={src_path};{dest_dir}')
+                append_bundle_arg(add_binary_args, 'add-binary', src_path, dest_dir)
 else:
     print("CRITICAL WARNING: WebView library paths not found. Program will likely crash.")
 
 # Explicitly collect Pythonnet
 import pythonnet
-pythonnet_dir = os.path.dirname(pythonnet.__file__)
-runtime_dll_path = os.path.join(pythonnet_dir, 'runtime', 'Python.Runtime.dll')
+
+pythonnet_runtime = os.path.join(os.path.dirname(pythonnet.__file__), 'runtime')
+runtime_dll_path = os.path.join(pythonnet_runtime, 'Python.Runtime.dll')
 
 if os.path.exists(runtime_dll_path):
     print(f"Explicitly enforcing Python.Runtime.dll from: {runtime_dll_path}")
     # Inject it directly into root AND pythonnet/runtime to survive ClrLoader searches
-    add_binary_args.append(f'--add-binary={runtime_dll_path};.')
-    add_binary_args.append(f'--add-binary={runtime_dll_path};pythonnet/runtime')
+    append_bundle_arg(add_binary_args, 'add-binary', runtime_dll_path, '.')
+    append_bundle_arg(add_binary_args, 'add-binary', runtime_dll_path, 'pythonnet/runtime')
+    
+    # Also include deps.json, which is crucial for modern .NET Core loaders (ClrLoader)
+    deps_json_path = os.path.join(pythonnet_runtime, 'Python.Runtime.deps.json')
+    if os.path.exists(deps_json_path):
+        append_bundle_arg(add_data_args, 'add-data', deps_json_path, '.')
+        append_bundle_arg(add_data_args, 'add-data', deps_json_path, 'pythonnet/runtime')
+else:
+    print(f"CRITICAL WARNING: Python.Runtime.dll not found in {pythonnet_runtime}")
 
 # Explicitly collect clr_loader architecture DLLs
 import clr_loader
@@ -57,19 +75,15 @@ if os.path.exists(clr_loader_dir):
     for march in ['amd64', 'x86']:
         dll_src = os.path.join(clr_loader_dir, march, 'ClrLoader.dll')
         if os.path.exists(dll_src):
-             add_binary_args.append(f'--add-binary={dll_src};clr_loader/ffi/dlls/{march}')
+            append_bundle_arg(add_binary_args, 'add-binary', dll_src, f'clr_loader/ffi/dlls/{march}')
 
 # 2. HIDDEN IMPORTS
 hidden_imports = [
-    'engineio.async_drivers.threading',
-    'System',
-    'System.IO',
-    'System.Windows.Forms',
     'clr_loader',
     'clr_loader.util',
     'clr_loader.util.find',
     'pythonnet',
-    'app',                 # Make sure the delegated app module is frozen
+    'backend.app',         # Make sure the delegated app module is frozen
     'backend',
     'backend.core',
     'backend.version',
@@ -84,7 +98,7 @@ args = [
     '--name=KoreanGlossaryReview',
     '--onedir',                             # Directory mode handles heavy Webview DLLs better
     '--windowed',                           # Hide the DOS popup
-    '--icon=icon.ico',                      
+    f'--icon={ICON_PATH}',
     f'--add-data={FRONTEND_DIST};frontend/dist', # Complete frontend tree
     '--clean',                              
     '--noconfirm',                          
@@ -107,4 +121,59 @@ config_dst = os.path.join(dist_dir, 'cfg.json')
 if os.path.exists(config_src):
     shutil.copy(config_src, config_dst)
 
-print("Package ready. Launching dist/KoreanGlossaryReview/KoreanGlossaryReview.exe now uses Crash Logger.")
+# 5. POST-BUILD DEPENDENCY VALIDATION
+print("\n--- Validating Packaged Dependencies ---")
+missing_deps = []
+detected_content_root = os.path.join(dist_dir, '_internal')
+search_roots = [dist_dir]
+if os.path.isdir(detected_content_root):
+    search_roots.insert(0, detected_content_root)
+    print(f"Detected PyInstaller content directory: {detected_content_root}")
+else:
+    print("Detected legacy onedir layout (no _internal folder).")
+
+def find_bundled_path(dest, filename):
+    relative_path = filename if dest == '.' else os.path.join(os.path.normpath(dest), filename)
+    for root in search_roots:
+        candidate = os.path.join(root, relative_path)
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+def check_bundled_items(args_list, item_type):
+    for arg in args_list:
+        if '=' in arg:
+            paths = arg.split('=', 1)[1]
+            if ';' in paths:
+                src, dest = paths.split(';', 1)
+                filename = os.path.basename(src)
+
+                bundled_path = find_bundled_path(dest, filename)
+                if not bundled_path:
+                    missing_deps.append(f"{item_type}: {dest}/{filename}")
+
+check_bundled_items(add_binary_args, "Binary")
+check_bundled_items(add_data_args, "Data")
+
+if missing_deps:
+    print("CRITICAL ERROR: The following required files are MISSING from the build output:")
+    for dep in missing_deps:
+        print(f" - {dep}")
+    print("The packaged application will likely crash or fail to initialize.")
+    sys.exit(1)
+else:
+    print("Build validation passed: All explicitly requested binaries and data files are present in the output directory!")
+
+# 6. BUILD PORTABLE RELEASE ZIP (ship this archive, not the exe alone)
+release_dir = os.path.join(BASE_DIR, 'release')
+os.makedirs(release_dir, exist_ok=True)
+release_zip_base = os.path.join(release_dir, 'KoreanGlossaryReview')
+release_zip_path = shutil.make_archive(
+    release_zip_base,
+    'zip',
+    root_dir=os.path.join(BASE_DIR, 'dist'),
+    base_dir='KoreanGlossaryReview'
+)
+
+print(f"\nRelease package ready: {release_zip_path}")
+print("Distribute this ZIP file directly. End users must extract the full folder before running KoreanGlossaryReview.exe.")

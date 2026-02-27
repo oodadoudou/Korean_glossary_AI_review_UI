@@ -37,6 +37,7 @@ Thumbs.db
 # PyInstaller
 build/
 dist/
+release/
 *.spec
 public/
 
