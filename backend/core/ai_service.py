@@ -53,14 +53,17 @@ class AIService:
             base_url = p.get("base_url", "").strip()
             model = p.get("model", "").strip()
             
-            if api_key and base_url and model:
+            if model:
                 try:
-                    client = openai.OpenAI(
-                        api_key=api_key,
-                        base_url=base_url,
-                        timeout=self.request_timeout,
-                        default_headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-                    )
+                    kwargs = {
+                        "api_key": api_key if api_key else "dummy_key",
+                        "timeout": self.request_timeout,
+                        "default_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                    }
+                    if base_url:
+                        kwargs["base_url"] = base_url
+                        
+                    client = openai.OpenAI(**kwargs)
                     masked_key = f"{api_key[:8]}..." if len(api_key) > 8 else "KEY"
                     self.providers.append({
                         "client": client,
@@ -90,12 +93,15 @@ class AIService:
             name = provider['name']
             try:
                 # Create a temporary check client with short timeout
-                check_client = openai.OpenAI(
-                    api_key=provider['api_key'],
-                    base_url=provider['base_url'],
-                    timeout=self.connect_timeout,
-                    default_headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-                )
+                kwargs_check = {
+                    "api_key": provider['api_key'] if provider['api_key'] else "dummy_key",
+                    "timeout": self.connect_timeout,
+                    "default_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                }
+                if provider['base_url']:
+                    kwargs_check["base_url"] = provider['base_url']
+                    
+                check_client = openai.OpenAI(**kwargs_check)
                 
                 # Use a unique prompt to prevent caching from upstream proxies
                 unique_prompt = f"Hi from review tool check {int(time.time())} {random.randint(1000, 9999)}"

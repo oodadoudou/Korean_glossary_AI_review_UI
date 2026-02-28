@@ -100,20 +100,23 @@ def test_connection():
             if not p.get("enabled", True):
                 continue
 
-            key = p.get("api_key", "")
-            base_url = p.get("base_url", "")
-            model = p.get("model", "")
+            key = p.get("api_key", "").strip()
+            base_url = p.get("base_url", "").strip()
+            model = p.get("model", "").strip()
             
-            masked_key = f"{key[:6]}..." if len(key) > 6 else key
+            masked_key = f"{key[:6]}..." if len(key) > 6 else (key or "None")
             provider_name = f"#{idx+1} {model}"
             
             try:
-                client = openai.OpenAI(
-                    api_key=key, 
-                    base_url=base_url, 
-                    timeout=connect_timeout,
-                    default_headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
-                )
+                kwargs_check = {
+                    "api_key": key if key else "dummy_key",
+                    "timeout": connect_timeout,
+                    "default_headers": {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+                }
+                if base_url:
+                    kwargs_check["base_url"] = base_url
+                    
+                client = openai.OpenAI(**kwargs_check)
                 
                 # Dynamic prompt to avoid cache
                 import time
