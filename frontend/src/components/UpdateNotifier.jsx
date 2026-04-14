@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Download, RefreshCw, AlertCircle } from 'lucide-react';
+import { Download, RefreshCw, AlertCircle, Star } from 'lucide-react';
 import api from '../api/client';
+
+const GITHUB_REPO_URL = 'https://github.com/oodadoudou/Korean_glossary_AI_review_UI';
 
 export default function UpdateNotifier() {
     const [currentVersion, setCurrentVersion] = useState('');
@@ -94,16 +96,28 @@ export default function UpdateNotifier() {
 
     // Default version display
     return (
-        <div className="p-4 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
+        <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3 text-xs text-gray-500">
             <span>{currentVersion || 'v...'}</span>
-            <button
-                onClick={checkUpdates}
-                disabled={status === 'checking'}
-                className="hover:text-indigo-600 transition-colors"
-                title="检查更新"
-            >
-                <RefreshCw size={12} className={status === 'checking' ? 'animate-spin' : ''} />
-            </button>
+            <div className="flex items-center gap-2">
+                <a
+                    href={GITHUB_REPO_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700 transition-colors hover:border-amber-300 hover:bg-amber-100 hover:text-amber-800"
+                    title="前往 GitHub 仓库点个 Star"
+                >
+                    
+                    <span>请给这个D一颗⭐️(ฅ'ω'ฅ)</span>
+                </a>
+                <button
+                    onClick={checkUpdates}
+                    disabled={status === 'checking'}
+                    className="hover:text-indigo-600 transition-colors"
+                    title="检查更新"
+                >
+                    <RefreshCw size={12} className={status === 'checking' ? 'animate-spin' : ''} />
+                </button>
+            </div>
         </div>
     );
 }

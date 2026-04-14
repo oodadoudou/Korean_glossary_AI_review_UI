@@ -18,13 +18,6 @@ export default function Resources() {
             color: "bg-emerald-50"
         },
         {
-            title: "汉化 Prompt 共享文档",
-            description: "notion文档在线协作，查看和分享最新的汉化提示词最佳实践。",
-            url: "https://nebula-truffle-0d4.notion.site/prompt-2db8b4c62abd8003b195c6758b8a5ac4",
-            icon: <BookOpen className="w-8 h-8 text-amber-600" />,
-            color: "bg-amber-50"
-        },
-        {
             title: "韩语小说汉化指南",
             description: "详细的韩语小说汉化教程，包含从入门到精通的完整指南。",
             url: "https://www.kdocs.cn/l/ce3lO955KwiY",
