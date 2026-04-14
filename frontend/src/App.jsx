@@ -74,6 +74,10 @@ function App() {
                     />
                 </nav>
 
+                <div className="px-6 pb-3 text-[11px] text-gray-400 select-none">
+                    <span className="text-gray-500">Crafted by Dadoudouoo</span>
+                </div>
+
                 <UpdateNotifier />
             </div>
 
