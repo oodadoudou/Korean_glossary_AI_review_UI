@@ -1,11 +1,12 @@
 flask
 pywebview
+pyobjc; sys_platform == "darwin"
 pandas
 openpyxl
 xlsxwriter
 openai
 tqdm
 requests
-pythonnet
-clr_loader
+pythonnet; sys_platform == "win32"
+clr_loader; sys_platform == "win32"
 cffi

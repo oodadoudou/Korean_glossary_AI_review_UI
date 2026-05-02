@@ -162,18 +162,64 @@ def test_connection():
     except Exception as e:
         return jsonify({"status": "error", "message": f"System Error: {str(e)}"})
 
+def _is_output_xlsx(name: str) -> bool:
+    """Identify outputs produced by previous runs (glossary_output_*.xlsx, modified*.xlsx)."""
+    lower = name.lower()
+    if lower.startswith('glossary_output'):
+        return True
+    if lower.startswith('modified') and lower.endswith('.xlsx'):
+        return True
+    if lower == 'modified.xlsx':
+        return True
+    return False
+
+
+def _list_candidate_files(path: str):
+    """Return (xlsx_candidates, txt_candidates) from a directory, excluding obvious outputs and lock files."""
+    try:
+        entries = os.listdir(path)
+    except OSError:
+        return [], []
+
+    xlsx_files = sorted([
+        f for f in entries
+        if f.lower().endswith('.xlsx')
+        and not f.startswith('~$')
+        and not _is_output_xlsx(f)
+    ])
+    txt_files = sorted([f for f in entries if f.lower().endswith('.txt')])
+    return xlsx_files, txt_files
+
+
 @api_blueprint.route('/check-folder', methods=['POST'])
 def check_folder():
     path = request.json.get('path')
     if not path or not os.path.exists(path):
         return jsonify({"valid": False, "error": "Path does not exist"})
-    
-    # Check for .xlsx files
-    files = [f for f in os.listdir(path) if f.endswith('.xlsx') and not f.startswith('~$')]
-    if not files:
-        return jsonify({"valid": False, "error": "No .xlsx files found in directory"})
-        
-    return jsonify({"valid": True})
+
+    xlsx_files, txt_files = _list_candidate_files(path)
+
+    if not xlsx_files:
+        return jsonify({
+            "valid": False,
+            "error": "No .xlsx files found in directory",
+            "xlsx_files": [],
+            "txt_files": txt_files,
+        })
+
+    if not txt_files:
+        return jsonify({
+            "valid": False,
+            "error": "No .txt reference file found in directory",
+            "xlsx_files": xlsx_files,
+            "txt_files": [],
+        })
+
+    return jsonify({
+        "valid": True,
+        "xlsx_files": xlsx_files,
+        "txt_files": txt_files,
+    })
 
 @api_blueprint.route('/task/config', methods=['POST'])
 def task_config():
@@ -185,6 +231,11 @@ def task_config():
     config = load_config()
     config['last_task_directory'] = data.get('directory')
     config['last_task_context'] = data.get('context')
+    # Optional explicit file selections (when directory has multiple xlsx/txt)
+    if 'glossary_file' in data:
+        config['last_task_glossary_file'] = data.get('glossary_file') or ''
+    if 'reference_file' in data:
+        config['last_task_reference_file'] = data.get('reference_file') or ''
     save_config(config)
     return jsonify({"status": "success"})
 
@@ -285,13 +336,19 @@ def start_task():
     
     directory = data.get('directory') or config.get('last_task_directory')
     context = data.get('context') or config.get('last_task_context', '')
-    
+    glossary_file = data.get('glossary_file') or config.get('last_task_glossary_file') or None
+    reference_file = data.get('reference_file') or config.get('last_task_reference_file') or None
+
     rounds = data.get('rounds', 1) # Default to 1 round
-    
+
     if not directory:
         return jsonify({"status": "error", "message": "No directory specified and no saved task config found."})
-        
-    success, msg = engine.start_task(directory, context, rounds)
+
+    success, msg = engine.start_task(
+        directory, context, rounds,
+        glossary_file=glossary_file,
+        reference_file=reference_file,
+    )
     return jsonify({"status": "success" if success else "error", "message": msg})
 
 @api_blueprint.route('/control/stop', methods=['POST'])
