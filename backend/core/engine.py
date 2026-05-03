@@ -1,7 +1,7 @@
 import threading
 import time
 import os
-import pandas as pd
+# pandas import moved inside _run_task to avoid early native library initialization
 from backend.core.ai_service import AIService
 from backend.core.glossary_processor import GlossaryProcessor
 from backend.config_manager import load_config
@@ -60,6 +60,7 @@ class ReviewEngine:
 
     def _run_task(self, directory, novel_background, rounds, glossary_file=None, reference_file=None):
         try:
+            import pandas as pd
             self.add_log(f"Task started. Total rounds: {rounds}")
             
             # --- Pre-flight API Key Validation ---
@@ -386,6 +387,7 @@ class ReviewEngine:
                             round_rows.append(final_row)
                 
                 # End of Round Processing
+                import pandas as pd
                 current_df = pd.DataFrame(round_rows)
                 
                 # Save Intermediate Files (Stash)
@@ -395,6 +397,7 @@ class ReviewEngine:
                 # We also need to save the modification log up to this point?
                 # The user asked for "intermediate files... in log...". 
                 # Let's save a snapshot of the log for this round.
+                import pandas as pd
                 round_log = [l for l in master_modification_log if l['round'] == round_num]
                 stash_log_path = os.path.join(log_dir, f'modified_{round_num}.xlsx')
                 pd.DataFrame(round_log).to_excel(stash_log_path, index=False)
@@ -414,6 +417,7 @@ class ReviewEngine:
             self.add_log(f"Finished. Saved final glossary to {output_path}")
 
             # Save Master Modification Log (Excel) with Column G
+            import pandas as pd
             log_path_xlsx = os.path.join(directory, 'modified.xlsx')
             pd.DataFrame(master_modification_log).to_excel(log_path_xlsx, index=False)
             self.add_log(f"Saved master modification log to {log_path_xlsx}")
@@ -434,6 +438,7 @@ class ReviewEngine:
 
     def _save_excel(self, df, path):
         try:
+            import pandas as pd
             with pd.ExcelWriter(path, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False, sheet_name='Sheet1')
                 worksheet = writer.sheets['Sheet1']
@@ -445,13 +450,16 @@ class ReviewEngine:
 
     def add_log(self, message):
         timestamp = time.strftime("%H:%M:%S")
-        self.logs.append(f"[{timestamp}] {message}")
-        if len(self.logs) > 100:
-            self.logs.pop(0)
+        with self._lock:
+            self.logs.append(f"[{timestamp}] {message}")
+            if len(self.logs) > 100:
+                self.logs.pop(0)
 
     def get_status(self):
-        return {
-            "running": self.is_running,
-            "progress": self.progress,
-            "logs": self.logs[-20:]
-        }
+        with self._lock:
+            current_logs = list(self.logs[-20:])
+            return {
+                "running": self.is_running,
+                "progress": self.progress.copy(),
+                "logs": current_logs
+            }

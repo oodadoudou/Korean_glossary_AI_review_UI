@@ -1,8 +1,8 @@
-import pandas as pd
 import json
 import re
 import os
 import concurrent.futures
+# pandas import moved inside methods
 from backend.core.ai_service import AIService
 from backend.config_manager import load_config
 
@@ -12,6 +12,7 @@ class GlossaryProcessor:
         self.config = load_config()
 
     def load_data(self, glossary_path, reference_path):
+        import pandas as pd
         glossary_df = pd.read_excel(glossary_path, engine='openpyxl')
         original_cols = glossary_df.columns.tolist()
         # Try to find frequency column
