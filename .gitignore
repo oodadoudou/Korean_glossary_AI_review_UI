@@ -47,3 +47,6 @@ temp/
 # Agents
 .claude/
 tasks/
+
+# Local-only build helpers (not distributed)
+generate_icons.py
