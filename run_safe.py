@@ -2,6 +2,17 @@ import sys
 import os
 import traceback
 import ctypes
+import faulthandler
+
+# Enable fault handler to see C-level backtraces if it crashes again
+faulthandler.enable()
+
+# Fix for macOS bus errors / crashes in threaded environments
+if sys.platform == "darwin":
+    os.environ['OBJC_DISABLE_INITIALIZE_FORK_SAFETY'] = 'YES'
+    os.environ['no_proxy'] = '*'
+    # Additional fix for macOS threading issues
+    os.environ['PYTHONMALLOC'] = 'malloc'
 
 def remove_zone_identifier(file_path):
     if os.name != 'nt':
@@ -51,15 +62,19 @@ def unblock_runtime_files():
     return removed_count
 
 def show_error_dialog(title, message):
-    """显示原生 Windows 错误弹窗。"""
-    try:
-        # MB_ICONERROR = 0x10, MB_OK = 0x0
-        ctypes.windll.user32.MessageBoxW(0, message, title, 0x10 | 0x0)
-    except Exception:
-        pass # Fallback if ctypes fails
+    """显示原生错误弹窗 (跨平台支持)。"""
+    if sys.platform == "win32":
+        try:
+            ctypes.windll.user32.MessageBoxW(0, message, title, 0x10 | 0x0)
+        except Exception:
+            pass
+    else:
+        # On macOS/Linux, we just print to stderr as a fallback
+        print(f"\n--- {title} ---\n{message}\n", file=sys.stderr)
 
 def main():
     try:
+        print(f"Starting application on {sys.platform}...")
         # Prevent pythonnet loader failures when files are marked as downloaded.
         unblock_runtime_files()
         # Directly import and run the main app
@@ -82,7 +97,7 @@ def main():
             pass
 
         # Display native UI alert to the user
-        show_error_dialog("应用启动失败",
+        show_error_dialog("应用启动失败 / Startup Failed",
                           f"应用启动时发生异常。\n\n"
                           f"错误详情已写入：\n{log_path}\n\n"
                           f"异常信息：\n{str(e)}")

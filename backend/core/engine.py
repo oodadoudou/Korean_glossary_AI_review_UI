@@ -1,7 +1,7 @@
 import threading
 import time
 import os
-import pandas as pd
+# pandas import moved inside _run_task to avoid early native library initialization
 from backend.core.ai_service import AIService
 from backend.core.glossary_processor import GlossaryProcessor
 from backend.config_manager import load_config
@@ -29,20 +29,23 @@ class ReviewEngine:
         self.processor = GlossaryProcessor(self.ai_service)
         self.config = load_config()
 
-    def start_task(self, directory, novel_background, rounds=1):
+    def start_task(self, directory, novel_background, rounds=1, glossary_file=None, reference_file=None):
         if self.is_running:
             return False, "Task is already running"
-        
+
         self.is_running = True
         self.stop_event.clear()
         self.progress = {"current": 0, "total": 0, "message": "Starting...", "percent": 0}
         self.logs = []
-        
+
         # Reload config to ensure latest API key and settings are used
         self.config = load_config()
         self.ai_service.reload_config()
-        
-        thread = threading.Thread(target=self._run_task, args=(directory, novel_background, int(rounds)))
+
+        thread = threading.Thread(
+            target=self._run_task,
+            args=(directory, novel_background, int(rounds), glossary_file, reference_file),
+        )
         thread.daemon = True
         thread.start()
         return True, "Task started"
@@ -55,8 +58,9 @@ class ReviewEngine:
         self.progress["message"] = "Stopping..."
         return True, "Task stopping"
 
-    def _run_task(self, directory, novel_background, rounds):
+    def _run_task(self, directory, novel_background, rounds, glossary_file=None, reference_file=None):
         try:
+            import pandas as pd
             self.add_log(f"Task started. Total rounds: {rounds}")
             
             # --- Pre-flight API Key Validation ---
@@ -73,16 +77,40 @@ class ReviewEngine:
 
             glossary_path = None
             reference_path = None
-            
-            # Find files
-            for f in os.listdir(directory):
-                if f.endswith('.xlsx') and not f.startswith('~') and 'glossary_output' not in f and 'modified' not in f.lower():
-                    glossary_path = os.path.join(directory, f)
-                elif f.endswith('.txt'):
-                    reference_path = os.path.join(directory, f)
-            
+
+            # If explicit selections provided (e.g. user picked from a multi-file folder), honor them.
+            if glossary_file:
+                candidate = os.path.join(directory, glossary_file)
+                if os.path.isfile(candidate):
+                    glossary_path = candidate
+                else:
+                    self.add_log(f"Selected glossary file not found: {glossary_file}. Falling back to auto-detect.")
+
+            if reference_file:
+                candidate = os.path.join(directory, reference_file)
+                if os.path.isfile(candidate):
+                    reference_path = candidate
+                else:
+                    self.add_log(f"Selected reference file not found: {reference_file}. Falling back to auto-detect.")
+
+            # Auto-detect any missing path. Excludes outputs (case-insensitive) and Excel lock files.
+            if not glossary_path or not reference_path:
+                for f in os.listdir(directory):
+                    lower = f.lower()
+                    if (not glossary_path
+                            and lower.endswith('.xlsx')
+                            and not f.startswith('~$')
+                            and not lower.startswith('glossary_output')
+                            and not lower.startswith('modified')):
+                        glossary_path = os.path.join(directory, f)
+                    elif not reference_path and lower.endswith('.txt'):
+                        reference_path = os.path.join(directory, f)
+
             if not glossary_path or not reference_path:
                 raise FileNotFoundError("Missing .xlsx or .txt files")
+
+            self.add_log(f"Glossary file: {os.path.basename(glossary_path)}")
+            self.add_log(f"Reference file: {os.path.basename(reference_path)}")
 
             glossary_df, reference_dict, original_cols = self.processor.load_data(glossary_path, reference_path)
             
@@ -359,6 +387,7 @@ class ReviewEngine:
                             round_rows.append(final_row)
                 
                 # End of Round Processing
+                import pandas as pd
                 current_df = pd.DataFrame(round_rows)
                 
                 # Save Intermediate Files (Stash)
@@ -368,6 +397,7 @@ class ReviewEngine:
                 # We also need to save the modification log up to this point?
                 # The user asked for "intermediate files... in log...". 
                 # Let's save a snapshot of the log for this round.
+                import pandas as pd
                 round_log = [l for l in master_modification_log if l['round'] == round_num]
                 stash_log_path = os.path.join(log_dir, f'modified_{round_num}.xlsx')
                 pd.DataFrame(round_log).to_excel(stash_log_path, index=False)
@@ -387,6 +417,7 @@ class ReviewEngine:
             self.add_log(f"Finished. Saved final glossary to {output_path}")
 
             # Save Master Modification Log (Excel) with Column G
+            import pandas as pd
             log_path_xlsx = os.path.join(directory, 'modified.xlsx')
             pd.DataFrame(master_modification_log).to_excel(log_path_xlsx, index=False)
             self.add_log(f"Saved master modification log to {log_path_xlsx}")
@@ -407,6 +438,7 @@ class ReviewEngine:
 
     def _save_excel(self, df, path):
         try:
+            import pandas as pd
             with pd.ExcelWriter(path, engine='xlsxwriter') as writer:
                 df.to_excel(writer, index=False, sheet_name='Sheet1')
                 worksheet = writer.sheets['Sheet1']
@@ -418,13 +450,16 @@ class ReviewEngine:
 
     def add_log(self, message):
         timestamp = time.strftime("%H:%M:%S")
-        self.logs.append(f"[{timestamp}] {message}")
-        if len(self.logs) > 100:
-            self.logs.pop(0)
+        with self._lock:
+            self.logs.append(f"[{timestamp}] {message}")
+            if len(self.logs) > 100:
+                self.logs.pop(0)
 
     def get_status(self):
-        return {
-            "running": self.is_running,
-            "progress": self.progress,
-            "logs": self.logs[-20:]
-        }
+        with self._lock:
+            current_logs = list(self.logs[-20:])
+            return {
+                "running": self.is_running,
+                "progress": self.progress.copy(),
+                "logs": current_logs
+            }
