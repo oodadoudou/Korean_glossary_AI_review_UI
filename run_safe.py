@@ -4,8 +4,28 @@ import traceback
 import ctypes
 import faulthandler
 
-# Enable fault handler to see C-level backtraces if it crashes again
-faulthandler.enable()
+# In PyInstaller --windowed mode, sys.stdout / sys.stderr are None.
+# Any print() or library that writes to them (including faulthandler) will
+# crash with "RuntimeError: sys.stderr is None". Replace them with devnull
+# so the rest of the module can use them safely.
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, 'w', encoding='utf-8')
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, 'w', encoding='utf-8')
+
+# Route faulthandler to a real log file so C-level crashes are captured
+# even in windowed mode.
+try:
+    if getattr(sys, 'frozen', False):
+        _log_dir = os.path.dirname(sys.executable)
+    else:
+        _log_dir = os.path.dirname(os.path.abspath(__file__))
+    _faulthandler_log = open(os.path.join(_log_dir, 'faulthandler.log'), 'w', encoding='utf-8')
+    faulthandler.enable(file=_faulthandler_log)
+except Exception:
+    # If faulthandler can't be enabled for any reason, keep going — it's
+    # diagnostic-only and must never block startup.
+    pass
 
 # Fix for macOS bus errors / crashes in threaded environments
 if sys.platform == "darwin":
