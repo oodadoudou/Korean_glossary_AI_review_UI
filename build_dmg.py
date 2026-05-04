@@ -4,13 +4,25 @@
     python build_dmg.py
 
 产物:
-    dist/KoreanGlossaryReview.app        — macOS 应用包
     release/KoreanGlossaryReview-<ver>.dmg — 可分发的磁盘镜像
+    (中间产物 dist/*.app 在 DMG 校验通过后会自动清理)
 
-前置:
-    1. cd frontend && npm install && npm run build
-    2. pip install -r requirements.txt pyinstaller
-    3. (可选) brew install create-dmg  — 不存在时回退到 hdiutil
+前置(强烈建议用纯净 venv 构建):
+    python3 -m venv .venv-build
+    source .venv-build/bin/activate
+    pip install -r requirements.txt pyinstaller
+    cd frontend && npm install && npm run build && cd ..
+    python build_dmg.py
+    deactivate
+
+为什么必须用 venv:
+    PyInstaller 通过依赖分析自动收集模块,如果你的全局 Python 装了
+    torch / pyarrow / playwright / PyQt5 / botocore / panel 等无关包,
+    它们会被一并打包,DMG 体积可能从 ~100 MB 膨胀到 800+ MB。
+    venv 隔离 + 下方 excluded_modules 双保险,确保只打必需依赖。
+
+可选:
+    brew install create-dmg  — 不存在时回退到 hdiutil(系统自带)
 """
 
 from __future__ import annotations
@@ -152,6 +164,42 @@ def build_app(icon_path: Path | None, version: str) -> Path:
     ]
     hidden_import_args = [f"--hidden-import={h}" for h in hidden_imports]
 
+    # 安全网:即便在脏环境(全局 Python)下构建,也明确剔除这些与本应用
+    # 完全无关的重量级依赖。PyInstaller 的依赖分析有时会顺藤摸瓜把 site-packages
+    # 里的科学计算 / 浏览器自动化 / 云 SDK 包都拖进来,导致 .app 体积爆炸。
+    # 真正彻底的解决办法是用 venv 构建(见模块 docstring),这里只是兜底。
+    excluded_modules = [
+        # 机器学习 / 数值计算
+        "torch", "torchvision", "torchaudio",
+        "tensorflow", "keras",
+        "scipy", "sklearn", "skimage", "statsmodels",
+        "numba", "llvmlite",
+        "transformers", "tokenizers", "datasets", "hf_xet",
+        "onnxruntime", "onnx",
+        "matplotlib", "seaborn", "plotly", "altair",
+        # 数据 / 列式存储 / 大数据
+        "pyarrow", "fastparquet",
+        # 浏览器自动化 (本应用走 pywebview/cocoa)
+        "playwright", "selenium",
+        # macOS 上 pywebview 用 cocoa,不需要 Qt
+        "PyQt5", "PyQt6", "PySide2", "PySide6",
+        # 云 SDK
+        "botocore", "boto3", "s3transfer",
+        # Notebook / 可视化框架
+        "notebook", "jupyterlab", "jupyter", "jupyter_server",
+        "ipykernel", "ipywidgets", "ipython",
+        "panel", "bokeh", "holoviews",
+        # 视频 / 多媒体
+        "av", "imageio", "imageio_ffmpeg", "moviepy",
+        # 天文 / 其它学科特定
+        "astropy", "astropy_iers_data",
+        # 开发工具(不应进入产品包)
+        "pytest", "mypy", "sphinx", "jedi", "black", "ruff", "isort",
+        # 可选 i18n,本项目未启用 flask-babel
+        "babel",
+    ]
+    exclude_args = [f"--exclude-module={m}" for m in excluded_modules]
+
     args: list[str] = [
         str(ENTRY_POINT),
         f"--name={APP_NAME}",
@@ -159,6 +207,7 @@ def build_app(icon_path: Path | None, version: str) -> Path:
         "--onedir",
         "--clean",
         "--noconfirm",
+        "--strip",      # 剥离原生扩展的调试符号,通常省 10-20%
         # macOS Bundle 元数据
         f"--osx-bundle-identifier=com.koreanglossaryreview.app",
     ]
@@ -167,6 +216,7 @@ def build_app(icon_path: Path | None, version: str) -> Path:
 
     args.extend(add_data_args)
     args.extend(hidden_import_args)
+    args.extend(exclude_args)
 
     print(f"PyInstaller args: {len(args)}")
     PyInstaller.__main__.run(args)
@@ -313,9 +363,19 @@ def main() -> None:
 
     dmg_path = build_dmg(app_path, version)
 
+    # DMG 已就绪,清理 dist/ 中的 .app 与 onedir 中间产物 — 最终交付物只有 DMG
+    if dmg_path.exists() and dmg_path.stat().st_size > 0:
+        print("\n清理中间产物 ...")
+        for item in (DIST_DIR / f"{APP_NAME}.app", DIST_DIR / APP_NAME):
+            if item.exists():
+                if item.is_dir():
+                    shutil.rmtree(item)
+                else:
+                    item.unlink()
+                print(f"  删除 {item}")
+
     print("\n打包完成 ")
-    print(f"  .app : {app_path}")
-    print(f"  .dmg : {dmg_path}")
+    print(f"  交付物: {dmg_path}")
     print(
         "\n提示:DMG 未做代码签名 / 公证。终端用户首次启动需在"
         "‘系统设置 -> 隐私与安全性’中允许打开,或执行:\n"
